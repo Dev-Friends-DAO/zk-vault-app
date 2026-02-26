@@ -1,5 +1,6 @@
 pub mod api;
 pub mod auth;
+pub mod crypto;
 pub mod state;
 
 #[derive(Debug, thiserror::Error)]
