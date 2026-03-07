@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 zk-vault-core = { path = "../core" }
-dioxus = { workspace = true, features = ["desktop", "router"] }
+dioxus = { workspace = true, features = ["desktop", "web", "mobile", "router"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }

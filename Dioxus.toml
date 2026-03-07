@@ -1,5 +1,5 @@
 [application]
 name = "zk-vault"
-default_platform = "desktop"
+default_platform = "web"
 
 [application.tools.tailwindcss]

@@ -7,5 +7,5 @@ use dioxus::prelude::*;
 
 fn main() {
     tracing_subscriber::fmt::init();
-    LaunchBuilder::desktop().launch(app::App);
+    LaunchBuilder::new().launch(app::App);
 }

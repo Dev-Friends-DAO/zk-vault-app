@@ -1,15 +1,15 @@
 # zk-vault-app
 
-**Desktop application for zk-vault — quantum-secure encrypted backup.**
+**Cross-platform application for zk-vault — quantum-secure encrypted backup.**
 
-This is the client application for [zk-vault](../zk-vault/), providing a desktop interface for managing post-quantum encrypted backups. All encryption and decryption happens locally on your device.
+This is the client application for [zk-vault](../zk-vault/), providing a desktop, web, and mobile interface for managing post-quantum encrypted backups. All encryption and decryption happens locally on your device.
 
 ## Architecture
 
 ```
 zk-vault-app (this repo)
 ├── crates/core    Client-side cryptography and state management
-└── crates/ui      Dioxus desktop application
+└── crates/ui      Dioxus cross-platform application
 
 zk-vault (sibling repo)
 ├── src/crypto     Shared post-quantum encryption primitives
@@ -43,7 +43,7 @@ All cryptographic operations run client-side. The app never sends plaintext anyw
 | Component | Technology |
 |---|---|
 | Language | Rust (2024 edition) |
-| UI framework | Dioxus 0.7 (desktop) |
+| UI framework | Dioxus 0.7 (desktop, web, mobile) |
 | Styling | Tailwind CSS |
 
 ## Development
@@ -52,8 +52,15 @@ All cryptographic operations run client-side. The app never sends plaintext anyw
 # Install Dioxus CLI
 cargo install dioxus-cli
 
-# Run in development mode
+# Run in development mode (desktop)
 dx serve --platform desktop
+
+# Run as web app
+dx serve --platform web
+
+# Run on mobile
+dx serve --platform ios
+dx serve --platform android
 ```
 
 ## Pages
@@ -80,7 +87,7 @@ crates/
       lib.rs       Module exports and error types
   ui/
     src/
-      main.rs      Desktop entry point
+      main.rs      Application entry point
       app.rs       Root component with layout
       routes.rs    Route definitions
       pages/       Page components
