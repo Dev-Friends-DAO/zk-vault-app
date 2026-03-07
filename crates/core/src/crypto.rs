@@ -60,12 +60,12 @@ pub fn generate_salt() -> [u8; 32] {
 
 pub fn derive_key(passphrase: &[u8], salt: &[u8]) -> Result<SensitiveBytes32> {
     let params = argon2::Params::new(ARGON2_M_COST, ARGON2_T_COST, ARGON2_P_COST, Some(32))
-        .map_err(|e| AppError::Auth(format!("Argon2 params: {e}")))?;
+        .map_err(|e| AppError::Crypto(format!("Argon2 params: {e}")))?;
     let argon2 = Argon2::new(argon2::Algorithm::Argon2id, argon2::Version::V0x13, params);
     let mut output = [0u8; 32];
     argon2
         .hash_password_into(passphrase, salt, &mut output)
-        .map_err(|e| AppError::Auth(format!("Argon2 derivation: {e}")))?;
+        .map_err(|e| AppError::Crypto(format!("Argon2 derivation: {e}")))?;
     Ok(SensitiveBytes32::new(output))
 }
 
@@ -91,12 +91,12 @@ pub fn encrypt(
     aad: &[u8],
 ) -> Result<([u8; 24], Vec<u8>)> {
     let cipher =
-        XChaCha20Poly1305::new_from_slice(key.as_bytes()).map_err(|e| AppError::Auth(format!("AEAD key: {e}")))?;
+        XChaCha20Poly1305::new_from_slice(key.as_bytes()).map_err(|e| AppError::Crypto(format!("AEAD key: {e}")))?;
     let nonce_bytes = generate_nonce();
     let nonce = XNonce::from_slice(&nonce_bytes);
     let ciphertext = cipher
         .encrypt(nonce, Payload { msg: plaintext, aad })
-        .map_err(|e| AppError::Auth(format!("Encryption: {e}")))?;
+        .map_err(|e| AppError::Crypto(format!("Encryption: {e}")))?;
     Ok((nonce_bytes, ciphertext))
 }
 
@@ -107,11 +107,11 @@ pub fn decrypt(
     aad: &[u8],
 ) -> Result<Vec<u8>> {
     let cipher =
-        XChaCha20Poly1305::new_from_slice(key.as_bytes()).map_err(|e| AppError::Auth(format!("AEAD key: {e}")))?;
+        XChaCha20Poly1305::new_from_slice(key.as_bytes()).map_err(|e| AppError::Crypto(format!("AEAD key: {e}")))?;
     let n = XNonce::from_slice(nonce);
     cipher
         .decrypt(n, Payload { msg: ciphertext, aad })
-        .map_err(|e| AppError::Auth(format!("Decryption: {e}")))
+        .map_err(|e| AppError::Crypto(format!("Decryption: {e}")))
 }
 
 pub fn encrypt_with_nonce(
@@ -121,11 +121,11 @@ pub fn encrypt_with_nonce(
     aad: &[u8],
 ) -> Result<Vec<u8>> {
     let cipher =
-        XChaCha20Poly1305::new_from_slice(key.as_bytes()).map_err(|e| AppError::Auth(format!("AEAD key: {e}")))?;
+        XChaCha20Poly1305::new_from_slice(key.as_bytes()).map_err(|e| AppError::Crypto(format!("AEAD key: {e}")))?;
     let n = XNonce::from_slice(nonce);
     cipher
         .encrypt(n, Payload { msg: plaintext, aad })
-        .map_err(|e| AppError::Auth(format!("Encryption: {e}")))
+        .map_err(|e| AppError::Crypto(format!("Encryption: {e}")))
 }
 
 // ── Hybrid KEM: ML-KEM-768 + X25519 ──
@@ -195,11 +195,11 @@ pub fn encapsulate(
 ) -> Result<EncapsulationResult> {
     // ML-KEM encapsulate
     let pk_array = hybrid_pk.kem_pk.as_slice().try_into().map_err(|_| {
-        AppError::Auth("Invalid ML-KEM public key length".into())
+        AppError::Crypto("Invalid ML-KEM public key length".into())
     })?;
     let ek = EncapsulationKey::<MlKem768Params>::from_bytes(pk_array);
     let (kem_ct, ss_kem) = ek.encapsulate(&mut OsRng).map_err(|_| {
-        AppError::Auth("ML-KEM encapsulation failed".into())
+        AppError::Crypto("ML-KEM encapsulation failed".into())
     })?;
 
     // X25519 ephemeral DH
@@ -235,15 +235,15 @@ pub fn decapsulate(
 ) -> Result<SensitiveBytes32> {
     // ML-KEM decapsulate
     let sk_array = kem_sk.try_into().map_err(|_| {
-        AppError::Auth("Invalid ML-KEM secret key length".into())
+        AppError::Crypto("Invalid ML-KEM secret key length".into())
     })?;
     let dk = DecapsulationKey::<MlKem768Params>::from_bytes(sk_array);
 
     let ct = ml_kem::Ciphertext::<MlKem768>::try_from(kem_ciphertext).map_err(|_| {
-        AppError::Auth("Invalid ML-KEM ciphertext length".into())
+        AppError::Crypto("Invalid ML-KEM ciphertext length".into())
     })?;
     let ss_kem = dk.decapsulate(&ct).map_err(|_| {
-        AppError::Auth("ML-KEM decapsulation failed".into())
+        AppError::Crypto("ML-KEM decapsulation failed".into())
     })?;
 
     // X25519 DH
@@ -261,7 +261,7 @@ pub fn decapsulate(
     let zero_nonce = [0u8; 24];
     let sym_key_bytes = decrypt(&wrapping_key, &zero_nonce, wrapped_key, KEM_WRAP_AAD)?;
     SensitiveBytes32::from_slice(&sym_key_bytes)
-        .ok_or_else(|| AppError::Auth("Decapsulated key wrong length".into()))
+        .ok_or_else(|| AppError::Crypto("Decapsulated key wrong length".into()))
 }
 
 // ── Key Store: generation + encryption ──
@@ -351,7 +351,7 @@ pub fn generate_key_store(passphrase: &str) -> Result<(Vec<u8>, Vec<u8>)> {
 pub fn derive_login_proof(passphrase: &str, encrypted_key_store: &[u8]) -> Result<Vec<u8>> {
     let key_store: EncryptedKeyStore = serde_json::from_slice(encrypted_key_store)?;
     let salt = hex::decode(&key_store.kdf_salt)
-        .map_err(|e| AppError::Auth(format!("Invalid salt hex: {e}")))?;
+        .map_err(|e| AppError::Crypto(format!("Invalid salt hex: {e}")))?;
     let derived_key = derive_key(passphrase.as_bytes(), &salt)?;
 
     // Same as registration: hash(derived_key) as OPAQUE placeholder
@@ -362,20 +362,20 @@ pub fn derive_login_proof(passphrase: &str, encrypted_key_store: &[u8]) -> Resul
 pub fn unlock_key_store(passphrase: &str, encrypted_key_store: &[u8]) -> Result<SensitiveBytes32> {
     let key_store: EncryptedKeyStore = serde_json::from_slice(encrypted_key_store)?;
     let salt = hex::decode(&key_store.kdf_salt)
-        .map_err(|e| AppError::Auth(format!("Invalid salt hex: {e}")))?;
+        .map_err(|e| AppError::Crypto(format!("Invalid salt hex: {e}")))?;
     let derived_key = derive_key(passphrase.as_bytes(), &salt)?;
 
     let mk_nonce_bytes = hex::decode(&key_store.master_key_nonce)
-        .map_err(|e| AppError::Auth(format!("Invalid nonce hex: {e}")))?;
+        .map_err(|e| AppError::Crypto(format!("Invalid nonce hex: {e}")))?;
     let mk_ciphertext = hex::decode(&key_store.encrypted_master_key)
-        .map_err(|e| AppError::Auth(format!("Invalid ciphertext hex: {e}")))?;
+        .map_err(|e| AppError::Crypto(format!("Invalid ciphertext hex: {e}")))?;
 
     let mut nonce = [0u8; 24];
     nonce.copy_from_slice(&mk_nonce_bytes);
 
     let master_key_bytes = decrypt(&derived_key, &nonce, &mk_ciphertext, b"master-key")?;
     SensitiveBytes32::from_slice(&master_key_bytes)
-        .ok_or_else(|| AppError::Auth("Master key wrong length".into()))
+        .ok_or_else(|| AppError::Crypto("Master key wrong length".into()))
 }
 
 #[cfg(test)]
