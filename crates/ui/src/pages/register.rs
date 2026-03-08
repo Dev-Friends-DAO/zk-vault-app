@@ -1,29 +1,58 @@
-use dioxus::prelude::*;
+use std::sync::{Arc, Mutex};
 
-use crate::routes::Route;
+use dioxus::prelude::*;
+use zk_vault_core::{AppState, VaultStatus};
 
 #[component]
 pub fn Register() -> Element {
+    let app_state: Arc<Mutex<AppState>> = use_context();
+    let mut vault_status: Signal<VaultStatus> = use_context();
+
     let mut passphrase = use_signal(String::new);
     let mut confirm = use_signal(String::new);
     let mut error_msg = use_signal(|| None::<String>);
+    let mut is_loading = use_signal(|| false);
 
     let on_submit = move |evt: FormEvent| {
         evt.prevent_default();
-        if passphrase() != confirm() {
+        if is_loading() {
+            return;
+        }
+
+        let pass = passphrase();
+        let conf = confirm();
+
+        if pass != conf {
             error_msg.set(Some("Passphrases do not match".into()));
             return;
         }
-        if passphrase().len() < 12 {
+        if pass.len() < 12 {
             error_msg.set(Some("Passphrase must be at least 12 characters".into()));
             return;
         }
-        // TODO: Argon2id → MK generation → OPAQUE registration
-        tracing::info!("Registration attempt");
+
+        is_loading.set(true);
+        error_msg.set(None);
+
+        let state = app_state.clone();
+        spawn(async move {
+            let result = tokio::task::spawn_blocking(move || {
+                let mut s = state.lock().unwrap();
+                s.init_vault(&pass)
+            })
+            .await
+            .unwrap();
+
+            is_loading.set(false);
+            match result {
+                Ok(()) => vault_status.set(VaultStatus::Unlocked),
+                Err(e) => error_msg.set(Some(format!("{e}"))),
+            }
+        });
     };
 
     rsx! {
-        div { class: "min-h-screen flex items-center justify-center",
+        div { class: "min-h-screen flex items-center justify-center bg-gray-950",
             div { class: "w-full max-w-md",
                 div { class: "text-center mb-8",
                     h1 { class: "text-3xl font-bold text-white", "zk-vault" }
@@ -36,13 +65,12 @@ pub fn Register() -> Element {
 
                     h2 { class: "text-xl font-semibold text-white", "Register" }
 
-                    // Security notice
                     div { class: "bg-amber-900/30 border border-amber-700 text-amber-300 px-4 py-2 rounded text-sm",
-                        "Your passphrase never leaves this device. The server cannot recover it."
+                        "Your passphrase never leaves this device. It cannot be recovered — store it safely."
                     }
 
                     if let Some(err) = error_msg() {
-                        div { class: "bg-red-900/50 border border-red-700 text-red-300 px-4 py-2 rounded",
+                        div { class: "bg-red-900/50 border border-red-700 text-red-300 px-4 py-2 rounded text-sm",
                             "{err}"
                         }
                     }
@@ -57,6 +85,7 @@ pub fn Register() -> Element {
                             class: "w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500",
                             placeholder: "Choose a strong passphrase (12+ chars)",
                             value: "{passphrase}",
+                            disabled: is_loading(),
                             oninput: move |evt| passphrase.set(evt.value()),
                         }
                     }
@@ -71,23 +100,20 @@ pub fn Register() -> Element {
                             class: "w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500",
                             placeholder: "Confirm your passphrase",
                             value: "{confirm}",
+                            disabled: is_loading(),
                             oninput: move |evt| confirm.set(evt.value()),
                         }
                     }
 
                     button {
                         r#type: "submit",
-                        class: "w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium transition-colors",
-                        "Create Vault"
-                    }
-
-                    div { class: "text-center text-sm text-gray-400",
-                        "Already have an account? "
-                        Link {
-                            to: Route::Login {},
-                            class: "text-indigo-400 hover:text-indigo-300",
-                            "Sign in"
-                        }
+                        class: if is_loading() {
+                            "w-full py-2 bg-indigo-800 text-gray-400 rounded-lg font-medium cursor-not-allowed"
+                        } else {
+                            "w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium transition-colors"
+                        },
+                        disabled: is_loading(),
+                        if is_loading() { "Creating vault..." } else { "Create Vault" }
                     }
                 }
             }
