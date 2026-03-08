@@ -1,26 +1,32 @@
 //! Client-side cryptographic operations.
-//! Same primitives as zk-vault backend: Argon2id, XChaCha20-Poly1305,
-//! ML-KEM-768 + X25519 hybrid KEM, ML-DSA-65 + Ed25519 hybrid signatures.
+//!
+//! Uses the SAME primitives, domain separators, and AADs as the zk-vault CLI
+//! to ensure keystore interoperability:
+//!   - Argon2id (t=3, m=256MB, p=4) for KDF
+//!   - XChaCha20-Poly1305 for AEAD
+//!   - ML-KEM-768 (pqcrypto-kyber) + X25519 hybrid KEM
+//!   - ML-DSA-65 + Ed25519 hybrid signatures
+//!   - BLAKE3 for hashing and key combining
 
 use argon2::Argon2;
-use blake3;
 use chacha20poly1305::{
     XChaCha20Poly1305, XNonce,
     aead::{Aead, KeyInit, Payload},
 };
 use ed25519_dalek::SigningKey as Ed25519SigningKey;
-use ml_kem::{EncodedSizeUser, KemCore, MlKem768, MlKem768Params};
-use ml_kem::kem::{Decapsulate, DecapsulationKey, Encapsulate, EncapsulationKey};
 use pqcrypto_dilithium::dilithium3;
-use pqcrypto_traits::sign::{PublicKey, SecretKey};
+use pqcrypto_kyber::kyber768;
+use pqcrypto_traits::kem::{
+    Ciphertext as _, PublicKey as PqPublicKey, SecretKey as PqSecretKey, SharedSecret as _,
+};
+use pqcrypto_traits::sign::{PublicKey as SignPublicKey, SecretKey as SignSecretKey};
 use rand::rngs::OsRng;
 use x25519_dalek::{EphemeralSecret, PublicKey as X25519PublicKey, StaticSecret};
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
-use crate::Result;
-use crate::AppError;
+use crate::{AppError, Result};
 
-// ── Sensitive wrappers ──
+// ── Sensitive wrapper ──
 
 #[derive(Clone, Zeroize, ZeroizeOnDrop)]
 pub struct SensitiveBytes32([u8; 32]);
@@ -48,7 +54,7 @@ impl SensitiveBytes32 {
 // ── KDF: Argon2id ──
 
 const ARGON2_T_COST: u32 = 3;
-const ARGON2_M_COST: u32 = 262144; // 256 MiB in KiB
+const ARGON2_M_COST: u32 = 262144; // 256 MiB
 const ARGON2_P_COST: u32 = 4;
 
 pub fn generate_salt() -> [u8; 32] {
@@ -60,6 +66,19 @@ pub fn generate_salt() -> [u8; 32] {
 
 pub fn derive_key(passphrase: &[u8], salt: &[u8]) -> Result<SensitiveBytes32> {
     let params = argon2::Params::new(ARGON2_M_COST, ARGON2_T_COST, ARGON2_P_COST, Some(32))
+        .map_err(|e| AppError::Crypto(format!("Argon2 params: {e}")))?;
+    let argon2 = Argon2::new(argon2::Algorithm::Argon2id, argon2::Version::V0x13, params);
+    let mut output = [0u8; 32];
+    argon2
+        .hash_password_into(passphrase, salt, &mut output)
+        .map_err(|e| AppError::Crypto(format!("Argon2 derivation: {e}")))?;
+    Ok(SensitiveBytes32::new(output))
+}
+
+/// Fast KDF for tests only (t=1, m=16KB, p=1).
+#[cfg(test)]
+pub fn derive_key_test(passphrase: &[u8], salt: &[u8]) -> Result<SensitiveBytes32> {
+    let params = argon2::Params::new(16, 1, 1, Some(32))
         .map_err(|e| AppError::Crypto(format!("Argon2 params: {e}")))?;
     let argon2 = Argon2::new(argon2::Algorithm::Argon2id, argon2::Version::V0x13, params);
     let mut output = [0u8; 32];
@@ -90,8 +109,8 @@ pub fn encrypt(
     plaintext: &[u8],
     aad: &[u8],
 ) -> Result<([u8; 24], Vec<u8>)> {
-    let cipher =
-        XChaCha20Poly1305::new_from_slice(key.as_bytes()).map_err(|e| AppError::Crypto(format!("AEAD key: {e}")))?;
+    let cipher = XChaCha20Poly1305::new_from_slice(key.as_bytes())
+        .map_err(|e| AppError::Crypto(format!("AEAD key: {e}")))?;
     let nonce_bytes = generate_nonce();
     let nonce = XNonce::from_slice(&nonce_bytes);
     let ciphertext = cipher
@@ -106,8 +125,8 @@ pub fn decrypt(
     ciphertext: &[u8],
     aad: &[u8],
 ) -> Result<Vec<u8>> {
-    let cipher =
-        XChaCha20Poly1305::new_from_slice(key.as_bytes()).map_err(|e| AppError::Crypto(format!("AEAD key: {e}")))?;
+    let cipher = XChaCha20Poly1305::new_from_slice(key.as_bytes())
+        .map_err(|e| AppError::Crypto(format!("AEAD key: {e}")))?;
     let n = XNonce::from_slice(nonce);
     cipher
         .decrypt(n, Payload { msg: ciphertext, aad })
@@ -120,8 +139,8 @@ pub fn encrypt_with_nonce(
     plaintext: &[u8],
     aad: &[u8],
 ) -> Result<Vec<u8>> {
-    let cipher =
-        XChaCha20Poly1305::new_from_slice(key.as_bytes()).map_err(|e| AppError::Crypto(format!("AEAD key: {e}")))?;
+    let cipher = XChaCha20Poly1305::new_from_slice(key.as_bytes())
+        .map_err(|e| AppError::Crypto(format!("AEAD key: {e}")))?;
     let n = XNonce::from_slice(nonce);
     cipher
         .encrypt(n, Payload { msg: plaintext, aad })
@@ -129,9 +148,11 @@ pub fn encrypt_with_nonce(
 }
 
 // ── Hybrid KEM: ML-KEM-768 + X25519 ──
+// Domain separators match zk-vault CLI exactly.
 
-const KEM_DOMAIN_SEPARATOR: &[u8; 32] = b"zk-vault-kem-domain-sep-v1\x00\x00\x00\x00\x00\x00";
-const KEM_WRAP_AAD: &[u8] = b"zk-vault-keywrap-v1";
+const KEM_DOMAIN_SEPARATOR: &[u8; 32] = b"zk-vault-hybrid-kem-v1-combine!!";
+const KEY_WRAP_AAD: &[u8] = b"zk-vault-keywrap-v1";
+const KEY_WRAP_NONCE: [u8; 24] = [0u8; 24];
 
 pub struct KemKeyPair {
     pub public_key: Vec<u8>,
@@ -140,10 +161,10 @@ pub struct KemKeyPair {
 
 impl KemKeyPair {
     pub fn generate() -> Self {
-        let (dk, ek) = MlKem768::generate(&mut OsRng);
+        let (pk, sk) = kyber768::keypair();
         Self {
-            public_key: ek.as_bytes().as_slice().to_vec(),
-            secret_key: dk.as_bytes().as_slice().to_vec(),
+            public_key: pk.as_bytes().to_vec(),
+            secret_key: sk.as_bytes().to_vec(),
         }
     }
 
@@ -189,18 +210,25 @@ pub struct EncapsulationResult {
     pub wrapped_key: Vec<u8>,
 }
 
+fn combine_shared_secrets(ss_kem: &[u8], ss_x25519: &[u8]) -> SensitiveBytes32 {
+    let mut combined = Vec::with_capacity(ss_kem.len() + ss_x25519.len());
+    combined.extend_from_slice(ss_kem);
+    combined.extend_from_slice(ss_x25519);
+
+    let result = blake3::keyed_hash(KEM_DOMAIN_SEPARATOR, &combined);
+    combined.zeroize();
+
+    SensitiveBytes32::new(*result.as_bytes())
+}
+
 pub fn encapsulate(
     hybrid_pk: &HybridPublicKey,
     sym_key: &SensitiveBytes32,
 ) -> Result<EncapsulationResult> {
-    // ML-KEM encapsulate
-    let pk_array = hybrid_pk.kem_pk.as_slice().try_into().map_err(|_| {
-        AppError::Crypto("Invalid ML-KEM public key length".into())
-    })?;
-    let ek = EncapsulationKey::<MlKem768Params>::from_bytes(pk_array);
-    let (kem_ct, ss_kem) = ek.encapsulate(&mut OsRng).map_err(|_| {
-        AppError::Crypto("ML-KEM encapsulation failed".into())
-    })?;
+    // ML-KEM-768 encapsulation
+    let kem_pk = kyber768::PublicKey::from_bytes(&hybrid_pk.kem_pk)
+        .map_err(|e| AppError::Crypto(format!("Invalid ML-KEM-768 public key: {e:?}")))?;
+    let (ss_kem, kem_ct) = kyber768::encapsulate(&kem_pk);
 
     // X25519 ephemeral DH
     let eph_secret = EphemeralSecret::random_from_rng(OsRng);
@@ -209,20 +237,16 @@ pub fn encapsulate(
     let ss_x25519 = eph_secret.diffie_hellman(&recipient_pk);
 
     // Combine shared secrets
-    let mut combined = Vec::new();
-    combined.extend_from_slice(ss_kem.as_slice());
-    combined.extend_from_slice(ss_x25519.as_bytes());
-    let wrapping_key_bytes = blake3::keyed_hash(KEM_DOMAIN_SEPARATOR, &combined);
-    let wrapping_key = SensitiveBytes32::new(*wrapping_key_bytes.as_bytes());
+    let wrapping_key = combine_shared_secrets(ss_kem.as_bytes(), ss_x25519.as_bytes());
 
-    // Wrap symmetric key
-    let zero_nonce = [0u8; 24];
-    let wrapped = encrypt_with_nonce(&wrapping_key, &zero_nonce, sym_key.as_bytes(), KEM_WRAP_AAD)?;
+    // Wrap the symmetric key
+    let wrapped_key =
+        encrypt_with_nonce(&wrapping_key, &KEY_WRAP_NONCE, sym_key.as_bytes(), KEY_WRAP_AAD)?;
 
     Ok(EncapsulationResult {
-        kem_ciphertext: kem_ct.as_slice().to_vec(),
+        kem_ciphertext: kem_ct.as_bytes().to_vec(),
         eph_x25519_pk: eph_public.to_bytes(),
-        wrapped_key: wrapped,
+        wrapped_key,
     })
 }
 
@@ -233,38 +257,28 @@ pub fn decapsulate(
     eph_x25519_pk: &[u8; 32],
     wrapped_key: &[u8],
 ) -> Result<SensitiveBytes32> {
-    // ML-KEM decapsulate
-    let sk_array = kem_sk.try_into().map_err(|_| {
-        AppError::Crypto("Invalid ML-KEM secret key length".into())
-    })?;
-    let dk = DecapsulationKey::<MlKem768Params>::from_bytes(sk_array);
-
-    let ct = ml_kem::Ciphertext::<MlKem768>::try_from(kem_ciphertext).map_err(|_| {
-        AppError::Crypto("Invalid ML-KEM ciphertext length".into())
-    })?;
-    let ss_kem = dk.decapsulate(&ct).map_err(|_| {
-        AppError::Crypto("ML-KEM decapsulation failed".into())
-    })?;
+    // ML-KEM-768 decapsulation
+    let sk = kyber768::SecretKey::from_bytes(kem_sk)
+        .map_err(|e| AppError::Crypto(format!("Invalid ML-KEM-768 secret key: {e:?}")))?;
+    let ct = kyber768::Ciphertext::from_bytes(kem_ciphertext)
+        .map_err(|e| AppError::Crypto(format!("Invalid ML-KEM-768 ciphertext: {e:?}")))?;
+    let ss_kem = kyber768::decapsulate(&ct, &sk);
 
     // X25519 DH
     let eph_pk = X25519PublicKey::from(*eph_x25519_pk);
     let ss_x25519 = x25519_sk.diffie_hellman(&eph_pk);
 
-    // Combine
-    let mut combined = Vec::new();
-    combined.extend_from_slice(ss_kem.as_slice());
-    combined.extend_from_slice(ss_x25519.as_bytes());
-    let wrapping_key_bytes = blake3::keyed_hash(KEM_DOMAIN_SEPARATOR, &combined);
-    let wrapping_key = SensitiveBytes32::new(*wrapping_key_bytes.as_bytes());
+    // Reconstruct wrapping key
+    let wrapping_key = combine_shared_secrets(ss_kem.as_bytes(), ss_x25519.as_bytes());
 
     // Unwrap
-    let zero_nonce = [0u8; 24];
-    let sym_key_bytes = decrypt(&wrapping_key, &zero_nonce, wrapped_key, KEM_WRAP_AAD)?;
+    let sym_key_bytes = decrypt(&wrapping_key, &KEY_WRAP_NONCE, wrapped_key, KEY_WRAP_AAD)?;
     SensitiveBytes32::from_slice(&sym_key_bytes)
-        .ok_or_else(|| AppError::Crypto("Decapsulated key wrong length".into()))
+        .ok_or_else(|| AppError::Crypto("Unwrapped key is not 32 bytes".into()))
 }
 
-// ── Key Store: generation + encryption ──
+// ── Key Store ──
+// Format and AADs match zk-vault CLI exactly for interoperability.
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct EncryptedKeyStore {
@@ -272,115 +286,259 @@ pub struct EncryptedKeyStore {
     pub kdf_salt: String,
     pub encrypted_master_key: String,
     pub master_key_nonce: String,
-    pub kem_pk: String,
     pub encrypted_kem_sk: String,
     pub kem_sk_nonce: String,
-    pub x25519_pk: String,
+    pub kem_pk: String,
     pub encrypted_x25519_sk: String,
     pub x25519_sk_nonce: String,
-    pub mldsa_pk: String,
+    pub x25519_pk: String,
     pub encrypted_mldsa_sk: String,
     pub mldsa_sk_nonce: String,
-    pub ed25519_pk: String,
+    pub mldsa_pk: String,
     pub encrypted_ed25519_sk: String,
     pub ed25519_sk_nonce: String,
+    pub ed25519_pk: String,
 }
 
-/// Generate all keys and produce an encrypted key store from a passphrase.
-/// Returns (EncryptedKeyStore as JSON bytes, OPAQUE-like registration blob).
-pub fn generate_key_store(passphrase: &str) -> Result<(Vec<u8>, Vec<u8>)> {
-    // 1. KDF
+impl EncryptedKeyStore {
+    pub const CURRENT_VERSION: u32 = 1;
+}
+
+/// Decrypted key material. Zeroized on drop.
+pub struct UnlockedKeys {
+    pub master_key: SensitiveBytes32,
+    pub kem_sk: Vec<u8>,
+    pub kem_pk: Vec<u8>,
+    pub x25519_sk: Vec<u8>,
+    pub x25519_pk: [u8; 32],
+    pub mldsa_sk: Vec<u8>,
+    pub mldsa_pk: Vec<u8>,
+    pub ed25519_sk: [u8; 32],
+    pub ed25519_pk: [u8; 32],
+}
+
+impl Drop for UnlockedKeys {
+    fn drop(&mut self) {
+        self.kem_sk.zeroize();
+        self.x25519_sk.zeroize();
+        self.mldsa_sk.zeroize();
+        self.ed25519_sk.zeroize();
+    }
+}
+
+/// Generate a new key store from a passphrase.
+pub fn generate_key_store(passphrase: &[u8]) -> Result<EncryptedKeyStore> {
     let salt = generate_salt();
-    let derived_key = derive_key(passphrase.as_bytes(), &salt)?;
+    let pdk = derive_key(passphrase, &salt)?;
+    generate_key_store_with_pdk(&pdk, &salt)
+}
 
-    // 2. Master key
+fn generate_key_store_with_pdk(
+    pdk: &SensitiveBytes32,
+    salt: &[u8],
+) -> Result<EncryptedKeyStore> {
     let master_key = generate_symmetric_key();
-    let (mk_nonce, encrypted_mk) = encrypt(&derived_key, master_key.as_bytes(), b"master-key")?;
-
-    // 3. ML-KEM-768
     let kem_kp = KemKeyPair::generate();
-    let (kem_nonce, encrypted_kem_sk) = encrypt(&derived_key, kem_kp.secret_key_bytes(), b"kem-sk")?;
-
-    // 4. X25519
     let x25519_kp = X25519KeyPair::generate();
-    let (x25519_nonce, encrypted_x25519_sk) =
-        encrypt(&derived_key, x25519_kp.secret_key().as_bytes(), b"x25519-sk")?;
-
-    // 5. ML-DSA-65
     let (mldsa_pk, mldsa_sk) = dilithium3::keypair();
-    let mldsa_pk_bytes = mldsa_pk.as_bytes().to_vec();
-    let mldsa_sk_bytes = mldsa_sk.as_bytes().to_vec();
-    let (mldsa_nonce, encrypted_mldsa_sk) = encrypt(&derived_key, &mldsa_sk_bytes, b"mldsa-sk")?;
-
-    // 6. Ed25519
     let ed25519_sk = Ed25519SigningKey::generate(&mut OsRng);
     let ed25519_pk = ed25519_sk.verifying_key();
-    let (ed25519_nonce, encrypted_ed25519_sk) =
-        encrypt(&derived_key, ed25519_sk.as_bytes(), b"ed25519-sk")?;
 
-    let key_store = EncryptedKeyStore {
-        version: 1,
+    // Encrypt each secret key with PDK — AADs match CLI exactly
+    let (mk_nonce, mk_ct) = encrypt(pdk, master_key.as_bytes(), b"zk-vault:mk")?;
+    let (kem_nonce, kem_ct) = encrypt(pdk, kem_kp.secret_key_bytes(), b"zk-vault:kem-sk")?;
+    let (x25519_nonce, x25519_ct) = encrypt(
+        pdk,
+        x25519_kp.secret_key().to_bytes().as_ref(),
+        b"zk-vault:x25519-sk",
+    )?;
+    let (mldsa_nonce, mldsa_ct) =
+        encrypt(pdk, mldsa_sk.as_bytes(), b"zk-vault:mldsa-sk")?;
+    let (ed25519_nonce, ed25519_ct) =
+        encrypt(pdk, ed25519_sk.as_bytes(), b"zk-vault:ed25519-sk")?;
+
+    Ok(EncryptedKeyStore {
+        version: EncryptedKeyStore::CURRENT_VERSION,
         kdf_salt: hex::encode(salt),
-        encrypted_master_key: hex::encode(&encrypted_mk),
+        encrypted_master_key: hex::encode(mk_ct),
         master_key_nonce: hex::encode(mk_nonce),
-        kem_pk: hex::encode(&kem_kp.public_key),
-        encrypted_kem_sk: hex::encode(&encrypted_kem_sk),
+        encrypted_kem_sk: hex::encode(kem_ct),
         kem_sk_nonce: hex::encode(kem_nonce),
-        x25519_pk: hex::encode(x25519_kp.public_key.as_bytes()),
-        encrypted_x25519_sk: hex::encode(&encrypted_x25519_sk),
+        kem_pk: hex::encode(&kem_kp.public_key),
+        encrypted_x25519_sk: hex::encode(x25519_ct),
         x25519_sk_nonce: hex::encode(x25519_nonce),
-        mldsa_pk: hex::encode(&mldsa_pk_bytes),
-        encrypted_mldsa_sk: hex::encode(&encrypted_mldsa_sk),
+        x25519_pk: hex::encode(x25519_kp.public_key.as_bytes()),
+        encrypted_mldsa_sk: hex::encode(mldsa_ct),
         mldsa_sk_nonce: hex::encode(mldsa_nonce),
-        ed25519_pk: hex::encode(ed25519_pk.as_bytes()),
-        encrypted_ed25519_sk: hex::encode(&encrypted_ed25519_sk),
+        mldsa_pk: hex::encode(mldsa_pk.as_bytes()),
+        encrypted_ed25519_sk: hex::encode(ed25519_ct),
         ed25519_sk_nonce: hex::encode(ed25519_nonce),
-    };
-
-    let key_store_json = serde_json::to_vec(&key_store)?;
-
-    // OPAQUE registration blob: for now, hash(derived_key) as a placeholder
-    // Full OPAQUE (opaque-ke) will replace this
-    let opaque_blob = blake3::hash(derived_key.as_bytes()).as_bytes().to_vec();
-
-    Ok((key_store_json, opaque_blob))
+        ed25519_pk: hex::encode(ed25519_pk.as_bytes()),
+    })
 }
 
-/// Derive OPAQUE login proof from passphrase + stored key store.
-/// Returns the proof blob to send to server.
-pub fn derive_login_proof(passphrase: &str, encrypted_key_store: &[u8]) -> Result<Vec<u8>> {
-    let key_store: EncryptedKeyStore = serde_json::from_slice(encrypted_key_store)?;
-    let salt = hex::decode(&key_store.kdf_salt)
-        .map_err(|e| AppError::Crypto(format!("Invalid salt hex: {e}")))?;
-    let derived_key = derive_key(passphrase.as_bytes(), &salt)?;
-
-    // Same as registration: hash(derived_key) as OPAQUE placeholder
-    Ok(blake3::hash(derived_key.as_bytes()).as_bytes().to_vec())
-}
-
-/// Decrypt the key store after login and return the master key.
-pub fn unlock_key_store(passphrase: &str, encrypted_key_store: &[u8]) -> Result<SensitiveBytes32> {
-    let key_store: EncryptedKeyStore = serde_json::from_slice(encrypted_key_store)?;
-    let salt = hex::decode(&key_store.kdf_salt)
-        .map_err(|e| AppError::Crypto(format!("Invalid salt hex: {e}")))?;
-    let derived_key = derive_key(passphrase.as_bytes(), &salt)?;
-
-    let mk_nonce_bytes = hex::decode(&key_store.master_key_nonce)
+/// Decrypt a single field from the keystore.
+fn decrypt_field(
+    pdk: &SensitiveBytes32,
+    nonce_hex: &str,
+    ciphertext_hex: &str,
+    aad: &[u8],
+) -> Result<Vec<u8>> {
+    let nonce_bytes = hex::decode(nonce_hex)
         .map_err(|e| AppError::Crypto(format!("Invalid nonce hex: {e}")))?;
-    let mk_ciphertext = hex::decode(&key_store.encrypted_master_key)
+    let nonce: [u8; 24] = nonce_bytes
+        .try_into()
+        .map_err(|_| AppError::Crypto("Invalid nonce length".into()))?;
+    let ciphertext = hex::decode(ciphertext_hex)
         .map_err(|e| AppError::Crypto(format!("Invalid ciphertext hex: {e}")))?;
+    decrypt(pdk, &nonce, &ciphertext, aad)
+}
 
-    let mut nonce = [0u8; 24];
-    nonce.copy_from_slice(&mk_nonce_bytes);
+/// Unlock just the master key (fast path for login).
+pub fn unlock_master_key(
+    passphrase: &[u8],
+    store: &EncryptedKeyStore,
+) -> Result<SensitiveBytes32> {
+    let salt = hex::decode(&store.kdf_salt)
+        .map_err(|e| AppError::Crypto(format!("Invalid salt hex: {e}")))?;
+    let pdk = derive_key(passphrase, &salt)?;
 
-    let master_key_bytes = decrypt(&derived_key, &nonce, &mk_ciphertext, b"master-key")?;
-    SensitiveBytes32::from_slice(&master_key_bytes)
-        .ok_or_else(|| AppError::Crypto("Master key wrong length".into()))
+    let mk_bytes = decrypt_field(
+        &pdk,
+        &store.master_key_nonce,
+        &store.encrypted_master_key,
+        b"zk-vault:mk",
+    )
+    .map_err(|_| AppError::Crypto("Invalid passphrase".into()))?;
+
+    SensitiveBytes32::from_slice(&mk_bytes)
+        .ok_or_else(|| AppError::Crypto("Master key is not 32 bytes".into()))
+}
+
+/// Unlock all keys from the store.
+pub fn unlock_all_keys(passphrase: &[u8], store: &EncryptedKeyStore) -> Result<UnlockedKeys> {
+    let salt = hex::decode(&store.kdf_salt)
+        .map_err(|e| AppError::Crypto(format!("Invalid salt hex: {e}")))?;
+    let pdk = derive_key(passphrase, &salt)?;
+    unlock_all_keys_with_pdk(&pdk, store)
+}
+
+fn unlock_all_keys_with_pdk(
+    pdk: &SensitiveBytes32,
+    store: &EncryptedKeyStore,
+) -> Result<UnlockedKeys> {
+    let mk_bytes = decrypt_field(
+        pdk,
+        &store.master_key_nonce,
+        &store.encrypted_master_key,
+        b"zk-vault:mk",
+    )
+    .map_err(|_| AppError::Crypto("Invalid passphrase".into()))?;
+    let master_key = SensitiveBytes32::from_slice(&mk_bytes)
+        .ok_or_else(|| AppError::Crypto("Master key is not 32 bytes".into()))?;
+
+    let kem_sk = decrypt_field(pdk, &store.kem_sk_nonce, &store.encrypted_kem_sk, b"zk-vault:kem-sk")?;
+    let x25519_sk = decrypt_field(
+        pdk,
+        &store.x25519_sk_nonce,
+        &store.encrypted_x25519_sk,
+        b"zk-vault:x25519-sk",
+    )?;
+    let mldsa_sk = decrypt_field(
+        pdk,
+        &store.mldsa_sk_nonce,
+        &store.encrypted_mldsa_sk,
+        b"zk-vault:mldsa-sk",
+    )?;
+    let ed25519_sk_bytes = decrypt_field(
+        pdk,
+        &store.ed25519_sk_nonce,
+        &store.encrypted_ed25519_sk,
+        b"zk-vault:ed25519-sk",
+    )?;
+
+    let kem_pk = hex::decode(&store.kem_pk)
+        .map_err(|e| AppError::Crypto(format!("Invalid hex: {e}")))?;
+    let x25519_pk_bytes = hex::decode(&store.x25519_pk)
+        .map_err(|e| AppError::Crypto(format!("Invalid hex: {e}")))?;
+    let mldsa_pk = hex::decode(&store.mldsa_pk)
+        .map_err(|e| AppError::Crypto(format!("Invalid hex: {e}")))?;
+    let ed25519_pk_bytes = hex::decode(&store.ed25519_pk)
+        .map_err(|e| AppError::Crypto(format!("Invalid hex: {e}")))?;
+
+    let x25519_pk: [u8; 32] = x25519_pk_bytes
+        .try_into()
+        .map_err(|_| AppError::Crypto("X25519 pk not 32 bytes".into()))?;
+    let ed25519_sk: [u8; 32] = ed25519_sk_bytes
+        .try_into()
+        .map_err(|_| AppError::Crypto("Ed25519 sk not 32 bytes".into()))?;
+    let ed25519_pk: [u8; 32] = ed25519_pk_bytes
+        .try_into()
+        .map_err(|_| AppError::Crypto("Ed25519 pk not 32 bytes".into()))?;
+
+    Ok(UnlockedKeys {
+        master_key,
+        kem_sk,
+        kem_pk,
+        x25519_sk,
+        x25519_pk,
+        mldsa_sk,
+        mldsa_pk,
+        ed25519_sk,
+        ed25519_pk,
+    })
+}
+
+// ── Vault path helpers ──
+
+pub fn vault_dir() -> std::path::PathBuf {
+    dirs::home_dir()
+        .expect("Cannot determine home directory")
+        .join(".zk-vault")
+}
+
+pub fn keystore_path() -> std::path::PathBuf {
+    vault_dir().join("keystore.json")
+}
+
+pub fn save_key_store(store: &EncryptedKeyStore) -> Result<()> {
+    let dir = vault_dir();
+    std::fs::create_dir_all(&dir)?;
+
+    let path = keystore_path();
+    let json = serde_json::to_string_pretty(store)?;
+    std::fs::write(&path, json)?;
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))?;
+    }
+
+    Ok(())
+}
+
+pub fn load_key_store() -> Result<EncryptedKeyStore> {
+    let path = keystore_path();
+    let json = std::fs::read_to_string(&path)?;
+    Ok(serde_json::from_str(&json)?)
+}
+
+/// BLAKE3 fingerprint of a public key (first 8 bytes, hex-encoded).
+pub fn fingerprint(pk_bytes: &[u8]) -> String {
+    let hash = blake3::hash(pk_bytes);
+    hex::encode(&hash.as_bytes()[..8])
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn generate_store_fast(passphrase: &[u8]) -> EncryptedKeyStore {
+        let salt = generate_salt();
+        let pdk = derive_key_test(passphrase, &salt).unwrap();
+        generate_key_store_with_pdk(&pdk, &salt).unwrap()
+    }
 
     #[test]
     fn aead_roundtrip() {
@@ -395,45 +553,71 @@ mod tests {
     #[test]
     fn kdf_deterministic() {
         let salt = [42u8; 32];
-        let k1 = derive_key(b"passphrase", &salt).unwrap();
-        let k2 = derive_key(b"passphrase", &salt).unwrap();
+        let k1 = derive_key_test(b"passphrase", &salt).unwrap();
+        let k2 = derive_key_test(b"passphrase", &salt).unwrap();
         assert_eq!(k1.as_bytes(), k2.as_bytes());
     }
 
     #[test]
     fn kdf_different_passphrase() {
         let salt = [42u8; 32];
-        let k1 = derive_key(b"passphrase1", &salt).unwrap();
-        let k2 = derive_key(b"passphrase2", &salt).unwrap();
+        let k1 = derive_key_test(b"passphrase1", &salt).unwrap();
+        let k2 = derive_key_test(b"passphrase2", &salt).unwrap();
         assert_ne!(k1.as_bytes(), k2.as_bytes());
     }
 
     #[test]
     fn key_store_roundtrip() {
-        let passphrase = "test-passphrase-12345";
-        let (key_store_json, _opaque_blob) = generate_key_store(passphrase).unwrap();
+        let passphrase = b"test-passphrase-12345";
+        let store = generate_store_fast(passphrase);
 
-        // Should be valid JSON
-        let _ks: EncryptedKeyStore = serde_json::from_slice(&key_store_json).unwrap();
+        // Verify JSON serialization
+        let json = serde_json::to_string(&store).unwrap();
+        let loaded: EncryptedKeyStore = serde_json::from_str(&json).unwrap();
+        assert_eq!(loaded.version, EncryptedKeyStore::CURRENT_VERSION);
+        assert_eq!(loaded.kem_pk, store.kem_pk);
 
-        // Should be able to unlock
-        let master_key = unlock_key_store(passphrase, &key_store_json).unwrap();
-        assert_eq!(master_key.as_bytes().len(), 32);
+        // Verify unlock with fast KDF
+        let salt = hex::decode(&store.kdf_salt).unwrap();
+        let pdk = derive_key_test(passphrase, &salt).unwrap();
+        let mk = decrypt_field(
+            &pdk,
+            &store.master_key_nonce,
+            &store.encrypted_master_key,
+            b"zk-vault:mk",
+        )
+        .unwrap();
+        assert_eq!(mk.len(), 32);
     }
 
     #[test]
-    fn key_store_wrong_passphrase() {
-        let (key_store_json, _) = generate_key_store("correct-passphrase").unwrap();
-        let result = unlock_key_store("wrong-passphrase", &key_store_json);
+    fn wrong_passphrase_fails() {
+        let store = generate_store_fast(b"correct-passphrase");
+        let salt = hex::decode(&store.kdf_salt).unwrap();
+        let wrong_pdk = derive_key_test(b"wrong-passphrase", &salt).unwrap();
+        let result = decrypt_field(
+            &wrong_pdk,
+            &store.master_key_nonce,
+            &store.encrypted_master_key,
+            b"zk-vault:mk",
+        );
         assert!(result.is_err());
     }
 
     #[test]
-    fn login_proof_matches_registration() {
-        let passphrase = "my-secure-passphrase";
-        let (key_store_json, opaque_blob) = generate_key_store(passphrase).unwrap();
-        let login_proof = derive_login_proof(passphrase, &key_store_json).unwrap();
-        assert_eq!(opaque_blob, login_proof);
+    fn unlock_all_keys_roundtrip() {
+        let passphrase = b"test-passphrase-12345";
+        let store = generate_store_fast(passphrase);
+        let salt = hex::decode(&store.kdf_salt).unwrap();
+        let pdk = derive_key_test(passphrase, &salt).unwrap();
+
+        let keys = unlock_all_keys_with_pdk(&pdk, &store).unwrap();
+        assert_eq!(keys.master_key.as_bytes().len(), 32);
+        assert!(!keys.kem_sk.is_empty());
+        assert!(!keys.kem_pk.is_empty());
+        assert_eq!(keys.x25519_sk.len(), 32);
+        assert_eq!(keys.ed25519_sk.len(), 32);
+        assert_eq!(keys.ed25519_pk.len(), 32);
     }
 
     #[test]
@@ -458,5 +642,11 @@ mod tests {
         .unwrap();
 
         assert_eq!(sym_key.as_bytes(), recovered.as_bytes());
+    }
+
+    #[test]
+    fn fingerprint_deterministic() {
+        let data = b"test-public-key-data";
+        assert_eq!(fingerprint(data), fingerprint(data));
     }
 }

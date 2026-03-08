@@ -10,15 +10,16 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 tokio = { workspace = true }
 
-# Crypto (same primitives as zk-vault backend)
+# Crypto — same crates and versions as zk-vault CLI for keystore interoperability
+pqcrypto-kyber = "0.8"
+pqcrypto-dilithium = "0.5"
+pqcrypto-traits = "0.3"
 argon2 = "0.5"
 chacha20poly1305 = "0.10"
 blake3 = "1"
-ml-kem = { version = "0.2", features = ["std"] }
 x25519-dalek = { version = "2", features = ["static_secrets"] }
-pqcrypto-dilithium = "0.5"
-pqcrypto-traits = "0.3"
 ed25519-dalek = { version = "2", features = ["rand_core"] }
 zeroize = { version = "1", features = ["derive"] }
 rand = "0.8"
 hex = "0.4"
+dirs = "6"

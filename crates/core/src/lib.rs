@@ -14,3 +14,7 @@ pub enum AppError {
 }
 
 pub type Result<T> = std::result::Result<T, AppError>;
+
+// Re-export key types for convenience.
+pub use crypto::{EncryptedKeyStore, UnlockedKeys};
+pub use state::{AppState, VaultStatus};
