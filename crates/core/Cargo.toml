@@ -23,3 +23,5 @@ zeroize = { version = "1", features = ["derive"] }
 rand = "0.8"
 hex = "0.4"
 dirs = "6"
+uuid = { version = "1", features = ["v7", "serde"] }
+chrono = { workspace = true }

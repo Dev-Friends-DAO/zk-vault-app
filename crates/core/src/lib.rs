@@ -1,4 +1,5 @@
 pub mod crypto;
+pub mod manifest;
 pub mod state;
 
 #[derive(Debug, thiserror::Error)]
