@@ -25,3 +25,4 @@ hex = "0.4"
 dirs = "6"
 uuid = { version = "1", features = ["v7", "serde"] }
 chrono = { workspace = true }
+toml = "0.8"
