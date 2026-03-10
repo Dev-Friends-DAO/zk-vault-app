@@ -24,19 +24,19 @@ pub fn Header() -> Element {
     };
 
     rsx! {
-        header { class: "h-14 bg-gray-900 border-b border-gray-800 flex items-center justify-between px-6",
+        header { class: "h-14 bg-slate-900/60 backdrop-blur-xl border-b border-slate-700/40 flex items-center justify-between px-6",
             div { class: "flex items-center gap-3",
-                span { class: "text-xs text-green-400 bg-green-900/30 px-2 py-1 rounded",
+                span { class: "badge-success",
                     "PQ-Secured"
                 }
                 if !fingerprint.is_empty() {
-                    span { class: "text-xs text-gray-500 font-mono",
+                    span { class: "text-xs text-slate-500 font-mono tracking-wider",
                         "{fingerprint}"
                     }
                 }
             }
             button {
-                class: "text-xs text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 px-3 py-1.5 rounded transition-colors",
+                class: "btn-secondary text-xs !px-3 !py-1.5",
                 onclick: on_lock,
                 "Lock"
             }

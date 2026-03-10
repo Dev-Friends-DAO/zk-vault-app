@@ -3,3 +3,5 @@ name = "zk-vault-ui"
 default_platform = "web"
 
 [application.tools.tailwindcss]
+input = "assets/main.css"
+output = "assets/tailwind.css"

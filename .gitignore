@@ -16,5 +16,8 @@ Thumbs.db
 .env
 .env.*
 
+# Node
+node_modules/
+
 # Dioxus
 /gen/

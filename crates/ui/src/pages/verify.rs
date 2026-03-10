@@ -3,23 +3,33 @@ use dioxus::prelude::*;
 #[component]
 pub fn Verify() -> Element {
     rsx! {
-        div { class: "space-y-6",
-            h1 { class: "text-2xl font-bold text-white", "Verify Integrity" }
+        div { class: "space-y-8",
+            h1 { class: "page-title", "Verify Integrity" }
 
-            div { class: "bg-gray-800 rounded-lg p-6 border border-gray-700 space-y-4",
-                p { class: "text-gray-400",
+            div { class: "glass-card p-6 space-y-5",
+                p { class: "text-slate-400",
                     "Verify the integrity of your backups using Merkle proofs "
                     "and blockchain anchors (Bitcoin OP_RETURN + Ethereum calldata)."
                 }
 
-                div { class: "grid grid-cols-1 md:grid-cols-2 gap-4",
-                    div { class: "bg-gray-900 rounded-lg p-4 border border-gray-700",
-                        p { class: "text-sm text-gray-400", "Merkle Proof" }
-                        p { class: "text-white mt-1", "No backups to verify" }
+                div { class: "grid grid-cols-1 md:grid-cols-2 gap-5",
+                    div { class: "bg-slate-900/60 rounded-xl p-5 border border-slate-700/30",
+                        div { class: "flex items-center gap-3 mb-3",
+                            div { class: "w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center text-cyan-400 text-xs font-bold",
+                                "M"
+                            }
+                            p { class: "text-sm text-slate-300 font-medium", "Merkle Proof" }
+                        }
+                        p { class: "text-white", "No backups to verify" }
                     }
-                    div { class: "bg-gray-900 rounded-lg p-4 border border-gray-700",
-                        p { class: "text-sm text-gray-400", "Blockchain Anchors" }
-                        p { class: "text-white mt-1", "No anchors found" }
+                    div { class: "bg-slate-900/60 rounded-xl p-5 border border-slate-700/30",
+                        div { class: "flex items-center gap-3 mb-3",
+                            div { class: "w-8 h-8 rounded-lg bg-violet-500/10 flex items-center justify-center text-violet-400 text-xs font-bold",
+                                "B"
+                            }
+                            p { class: "text-sm text-slate-300 font-medium", "Blockchain Anchors" }
+                        }
+                        p { class: "text-white", "No anchors found" }
                     }
                 }
             }

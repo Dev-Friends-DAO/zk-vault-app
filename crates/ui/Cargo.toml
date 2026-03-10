@@ -5,11 +5,18 @@ edition = "2024"
 
 [dependencies]
 zk-vault-core = { path = "../core" }
-dioxus = { workspace = true, features = ["desktop", "web", "mobile", "router"] }
+dioxus = { workspace = true, features = ["router"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
-tokio = { workspace = true }
-
 chrono = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tokio = { workspace = true }
+dioxus = { workspace = true, features = ["desktop", "mobile", "router"] }
 tracing-subscriber = "0.3"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { version = "0.2", features = ["js"] }
+dioxus = { workspace = true, features = ["web", "router"] }
+uuid = { workspace = true, features = ["js"] }

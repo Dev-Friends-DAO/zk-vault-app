@@ -63,20 +63,22 @@ pub fn Settings() -> Element {
     };
 
     rsx! {
-        div { class: "space-y-6",
-            h1 { class: "text-2xl font-bold text-white", "Settings" }
+        div { class: "space-y-8",
+            h1 { class: "page-title", "Settings" }
 
             // Vault info
-            div { class: "bg-gray-800 rounded-lg p-6 border border-gray-700 space-y-3",
-                h2 { class: "text-lg font-semibold text-white", "Vault" }
+            div { class: "glass-card p-6 space-y-4",
+                h2 { class: "section-title", "Vault" }
+                div { class: "glow-line" }
                 InfoRow { label: "Path", value: vault_dir }
                 InfoRow { label: "Backups", value: "{backup_count}" }
             }
 
             // Public key fingerprints
             if let Some(fp) = &fingerprints {
-                div { class: "bg-gray-800 rounded-lg p-6 border border-gray-700 space-y-3",
-                    h2 { class: "text-lg font-semibold text-white", "Public Keys" }
+                div { class: "glass-card p-6 space-y-4",
+                    h2 { class: "section-title", "Public Keys" }
+                    div { class: "glow-line" }
                     FingerprintRow { label: "ML-KEM-768", value: fp.kem.clone() }
                     FingerprintRow { label: "X25519", value: fp.x25519.clone() }
                     FingerprintRow { label: "ML-DSA-65", value: fp.mldsa.clone() }
@@ -85,8 +87,9 @@ pub fn Settings() -> Element {
             }
 
             // Crypto info (static)
-            div { class: "bg-gray-800 rounded-lg p-6 border border-gray-700 space-y-2",
-                h2 { class: "text-lg font-semibold text-white mb-2", "Cryptography" }
+            div { class: "glass-card p-6 space-y-3",
+                h2 { class: "section-title mb-1", "Cryptography" }
+                div { class: "glow-line" }
                 InfoRow { label: "Encryption", value: "XChaCha20-Poly1305" }
                 InfoRow { label: "Key Exchange", value: "ML-KEM-768 + X25519 (Hybrid)" }
                 InfoRow { label: "Signatures", value: "ML-DSA-65 + Ed25519 (Hybrid)" }
@@ -97,17 +100,18 @@ pub fn Settings() -> Element {
             // S3 configuration
             form {
                 onsubmit: on_save_s3,
-                class: "bg-gray-800 rounded-lg p-6 border border-gray-700 space-y-4",
+                class: "glass-card p-6 space-y-5",
 
-                h2 { class: "text-lg font-semibold text-white", "S3 Storage" }
-                p { class: "text-sm text-gray-400", "Configure S3-compatible storage (AWS S3, Backblaze B2, Wasabi, MinIO, etc.)" }
+                h2 { class: "section-title", "S3 Storage" }
+                div { class: "glow-line" }
+                p { class: "text-sm text-slate-400", "Configure S3-compatible storage (AWS S3, Backblaze B2, Wasabi, MinIO, etc.)" }
 
                 if let Some((ok, msg)) = save_msg() {
                     div {
                         class: if ok {
-                            "bg-green-900/50 border border-green-700 text-green-300 px-4 py-2 rounded text-sm"
+                            "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-4 py-3 rounded-xl text-sm"
                         } else {
-                            "bg-red-900/50 border border-red-700 text-red-300 px-4 py-2 rounded text-sm"
+                            "bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-xl text-sm"
                         },
                         "{msg}"
                     }
@@ -141,41 +145,42 @@ pub fn Settings() -> Element {
                 }
 
                 div { class: "max-w-md",
-                    label { class: "block text-sm text-gray-300 mb-1", "Secret Key" }
+                    label { class: "block text-sm text-slate-300 mb-2 font-medium", "Secret Key" }
                     input {
                         r#type: "password",
-                        class: "w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500",
+                        class: "input-field",
                         placeholder: "Your secret access key",
                         value: "{secret_key}",
                         oninput: move |evt| secret_key.set(evt.value()),
                     }
                 }
 
-                div { class: "flex items-center gap-2",
+                div { class: "flex items-center gap-3",
                     input {
                         id: "path_style",
                         r#type: "checkbox",
-                        class: "rounded bg-gray-900 border-gray-600 text-indigo-600",
+                        class: "rounded bg-slate-900 border-slate-600 text-cyan-500 focus:ring-cyan-500/20",
                         checked: path_style(),
                         onchange: move |evt| path_style.set(evt.checked()),
                     }
-                    label { class: "text-sm text-gray-300", r#for: "path_style",
+                    label { class: "text-sm text-slate-300", r#for: "path_style",
                         "Path-style addressing (required for MinIO)"
                     }
                 }
 
                 button {
                     r#type: "submit",
-                    class: "px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium transition-colors",
+                    class: "btn-primary",
                     "Save S3 Config"
                 }
             }
 
             // Danger zone
-            div { class: "bg-gray-800 rounded-lg p-6 border border-red-900 space-y-4",
-                h2 { class: "text-lg font-semibold text-red-400", "Danger Zone" }
+            div { class: "glass-card p-6 space-y-4 !border-red-500/20",
+                h2 { class: "text-lg font-semibold text-red-400 tracking-tight", "Danger Zone" }
+                div { class: "h-px bg-gradient-to-r from-transparent via-red-500/30 to-transparent" }
                 button {
-                    class: "px-4 py-2 bg-red-900 hover:bg-red-800 text-red-300 rounded-lg text-sm transition-colors",
+                    class: "btn-danger",
                     onclick: on_lock,
                     "Lock Vault"
                 }
@@ -187,9 +192,9 @@ pub fn Settings() -> Element {
 #[component]
 fn InfoRow(label: String, value: String) -> Element {
     rsx! {
-        div { class: "flex justify-between text-sm",
-            span { class: "text-gray-400", "{label}" }
-            span { class: "text-white", "{value}" }
+        div { class: "flex justify-between text-sm py-1",
+            span { class: "text-slate-400", "{label}" }
+            span { class: "text-white font-medium", "{value}" }
         }
     }
 }
@@ -197,9 +202,9 @@ fn InfoRow(label: String, value: String) -> Element {
 #[component]
 fn FingerprintRow(label: String, value: String) -> Element {
     rsx! {
-        div { class: "flex justify-between text-sm",
-            span { class: "text-gray-400", "{label}" }
-            span { class: "text-green-400 font-mono", "{value}" }
+        div { class: "flex justify-between text-sm py-1",
+            span { class: "text-slate-400", "{label}" }
+            span { class: "text-cyan-400 font-mono tracking-wider", "{value}" }
         }
     }
 }
@@ -213,10 +218,10 @@ fn FormField(
 ) -> Element {
     rsx! {
         div {
-            label { class: "block text-sm text-gray-300 mb-1", "{label}" }
+            label { class: "block text-sm text-slate-300 mb-2 font-medium", "{label}" }
             input {
                 r#type: "text",
-                class: "w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500",
+                class: "input-field",
                 placeholder: "{placeholder}",
                 value: "{value}",
                 oninput: move |evt| on_input(evt.value()),

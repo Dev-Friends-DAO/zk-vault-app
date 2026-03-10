@@ -21,35 +21,35 @@ pub fn Dashboard() -> Element {
     let total_files: u32 = backups().iter().map(|b| b.file_count).sum();
 
     rsx! {
-        div { class: "space-y-6",
+        div { class: "space-y-8",
             div { class: "flex items-center justify-between",
-                h1 { class: "text-2xl font-bold text-white", "Dashboard" }
+                h1 { class: "page-title", "Dashboard" }
                 Link {
                     to: Route::Backup {},
-                    class: "px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium transition-colors",
+                    class: "btn-primary",
                     "New Backup"
                 }
             }
 
             // Stats cards
-            div { class: "grid grid-cols-1 md:grid-cols-3 gap-4",
-                StatCard { label: "Total Backups", value: "{backup_count}" }
-                StatCard { label: "Files Backed Up", value: "{total_files}" }
-                StatCard { label: "Original Size", value: "{manifest::human_size(total_size)}" }
+            div { class: "grid grid-cols-1 md:grid-cols-3 gap-5",
+                StatCard { label: "Total Backups", value: "{backup_count}", accent: "cyan" }
+                StatCard { label: "Files Backed Up", value: "{total_files}", accent: "emerald" }
+                StatCard { label: "Original Size", value: "{manifest::human_size(total_size)}", accent: "violet" }
             }
 
             // Recent backups
-            div { class: "bg-gray-800 rounded-lg border border-gray-700",
-                div { class: "px-5 py-4 border-b border-gray-700",
-                    h2 { class: "text-lg font-semibold text-white", "Recent Backups" }
+            div { class: "glass-card overflow-hidden",
+                div { class: "px-6 py-5 border-b border-slate-700/40",
+                    h2 { class: "section-title", "Recent Backups" }
                 }
 
                 if backups().is_empty() {
-                    div { class: "p-5 text-gray-400 text-center",
-                        p { "No backups yet. Use the CLI or click New Backup to start." }
+                    div { class: "p-8 text-slate-400 text-center",
+                        p { class: "text-slate-500", "No backups yet. Use the CLI or click New Backup to start." }
                     }
                 } else {
-                    div { class: "divide-y divide-gray-700",
+                    div { class: "divide-y divide-slate-700/40",
                         for backup in backups().iter().take(10) {
                             BackupRow { backup: backup.clone() }
                         }
@@ -61,11 +61,26 @@ pub fn Dashboard() -> Element {
 }
 
 #[component]
-fn StatCard(label: String, value: String) -> Element {
+fn StatCard(label: String, value: String, accent: String) -> Element {
+    let accent_classes = match accent.as_str() {
+        "emerald" => ("text-emerald-400", "bg-emerald-500/10", "shadow-emerald-500/5"),
+        "violet" => ("text-violet-400", "bg-violet-500/10", "shadow-violet-500/5"),
+        _ => ("text-cyan-400", "bg-cyan-500/10", "shadow-cyan-500/5"),
+    };
+
     rsx! {
-        div { class: "bg-gray-800 rounded-lg p-5 border border-gray-700",
-            p { class: "text-sm text-gray-400", "{label}" }
-            p { class: "text-3xl font-bold text-white mt-1", "{value}" }
+        div { class: "glass-card p-6 hover:shadow-lg {accent_classes.2} transition-all duration-300",
+            div { class: "flex items-center justify-between mb-3",
+                p { class: "text-sm text-slate-400 font-medium", "{label}" }
+                div { class: "w-8 h-8 rounded-lg {accent_classes.1} flex items-center justify-center {accent_classes.0} text-xs font-bold",
+                    match accent.as_str() {
+                        "emerald" => "F",
+                        "violet" => "S",
+                        _ => "B",
+                    }
+                }
+            }
+            p { class: "text-3xl font-bold text-white tracking-tight", "{value}" }
         }
     }
 }
@@ -77,26 +92,26 @@ fn BackupRow(backup: BackupSummary) -> Element {
     let id_short = &backup.backup_id.to_string()[..8];
 
     rsx! {
-        div { class: "px-5 py-4 flex items-center justify-between hover:bg-gray-750",
+        div { class: "px-6 py-4 flex items-center justify-between hover:bg-slate-800/30 transition-colors duration-200",
             div { class: "flex-1",
                 div { class: "flex items-center gap-3",
                     span { class: "text-white font-medium",
                         "{backup.source}"
                     }
-                    span { class: "text-xs text-gray-500 font-mono",
+                    span { class: "text-xs text-slate-500 font-mono tracking-wider",
                         "{id_short}"
                     }
                     if backup.anchored {
-                        span { class: "text-xs text-green-400 bg-green-900/30 px-1.5 py-0.5 rounded",
+                        span { class: "badge-success",
                             "Anchored"
                         }
                     }
                 }
-                div { class: "text-sm text-gray-400 mt-1",
+                div { class: "text-sm text-slate-400 mt-1",
                     "{backup.file_count} files · {size_str} · {time_str}"
                 }
             }
-            div { class: "text-xs text-gray-500 font-mono",
+            div { class: "text-xs text-slate-500 font-mono tracking-wider",
                 "{backup.merkle_root}"
             }
         }

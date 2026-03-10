@@ -3,63 +3,77 @@ use dioxus::prelude::*;
 #[component]
 pub fn Sources() -> Element {
     rsx! {
-        div { class: "space-y-6",
+        div { class: "space-y-8",
             div { class: "flex items-center justify-between",
-                h1 { class: "text-2xl font-bold text-white", "Data Sources" }
+                h1 { class: "page-title", "Data Sources" }
                 button {
-                    class: "px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium transition-colors",
+                    class: "btn-primary",
                     "Connect Source"
                 }
             }
 
             // Available sources
-            div { class: "grid grid-cols-1 md:grid-cols-2 gap-4",
-                // Google Drive
-                div { class: "bg-gray-800 rounded-lg p-5 border border-gray-700 flex items-center gap-4",
-                    div { class: "w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold",
-                        "G"
-                    }
-                    div { class: "flex-1",
-                        p { class: "text-white font-medium", "Google Drive" }
-                        p { class: "text-sm text-gray-400", "Not connected" }
-                    }
-                    button {
-                        class: "px-3 py-1 bg-gray-700 hover:bg-gray-600 text-gray-300 rounded text-sm transition-colors",
-                        "Connect"
-                    }
+            div { class: "grid grid-cols-1 md:grid-cols-2 gap-5",
+                SourceCard {
+                    name: "Google Drive",
+                    icon: "G",
+                    icon_color: "from-blue-500 to-blue-600",
+                    status: "Not connected",
+                    available: true,
                 }
-
-                // Gmail (coming soon)
-                div { class: "bg-gray-800 rounded-lg p-5 border border-gray-700 flex items-center gap-4 opacity-50",
-                    div { class: "w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center text-white font-bold",
-                        "M"
-                    }
-                    div { class: "flex-1",
-                        p { class: "text-white font-medium", "Gmail" }
-                        p { class: "text-sm text-gray-400", "Coming soon" }
-                    }
+                SourceCard {
+                    name: "Gmail",
+                    icon: "M",
+                    icon_color: "from-red-500 to-red-600",
+                    status: "Coming soon",
+                    available: false,
                 }
-
-                // Notion (coming soon)
-                div { class: "bg-gray-800 rounded-lg p-5 border border-gray-700 flex items-center gap-4 opacity-50",
-                    div { class: "w-10 h-10 bg-gray-600 rounded-lg flex items-center justify-center text-white font-bold",
-                        "N"
-                    }
-                    div { class: "flex-1",
-                        p { class: "text-white font-medium", "Notion" }
-                        p { class: "text-sm text-gray-400", "Coming soon" }
-                    }
+                SourceCard {
+                    name: "Notion",
+                    icon: "N",
+                    icon_color: "from-slate-400 to-slate-500",
+                    status: "Coming soon",
+                    available: false,
                 }
+                SourceCard {
+                    name: "GitHub",
+                    icon: "GH",
+                    icon_color: "from-slate-500 to-slate-600",
+                    status: "Coming soon",
+                    available: false,
+                }
+            }
+        }
+    }
+}
 
-                // GitHub (coming soon)
-                div { class: "bg-gray-800 rounded-lg p-5 border border-gray-700 flex items-center gap-4 opacity-50",
-                    div { class: "w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center text-white font-bold border border-gray-600",
-                        "GH"
-                    }
-                    div { class: "flex-1",
-                        p { class: "text-white font-medium", "GitHub" }
-                        p { class: "text-sm text-gray-400", "Coming soon" }
-                    }
+#[component]
+fn SourceCard(
+    name: String,
+    icon: String,
+    icon_color: String,
+    status: String,
+    available: bool,
+) -> Element {
+    let card_class = if available {
+        "glass-card-hover p-5 flex items-center gap-4"
+    } else {
+        "glass-card p-5 flex items-center gap-4 opacity-50"
+    };
+
+    rsx! {
+        div { class: "{card_class}",
+            div { class: "w-11 h-11 bg-gradient-to-br {icon_color} rounded-xl flex items-center justify-center text-white font-bold shadow-lg",
+                "{icon}"
+            }
+            div { class: "flex-1",
+                p { class: "text-white font-medium", "{name}" }
+                p { class: "text-sm text-slate-400 mt-0.5", "{status}" }
+            }
+            if available {
+                button {
+                    class: "btn-secondary text-sm !px-3 !py-1.5",
+                    "Connect"
                 }
             }
         }

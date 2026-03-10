@@ -3,32 +3,58 @@ use dioxus::prelude::*;
 #[component]
 pub fn Backup() -> Element {
     rsx! {
-        div { class: "space-y-6",
-            h1 { class: "text-2xl font-bold text-white", "New Backup" }
+        div { class: "space-y-8",
+            h1 { class: "page-title", "New Backup" }
 
-            div { class: "bg-gray-800 rounded-lg p-6 border border-gray-700 space-y-4",
+            div { class: "glass-card p-8 space-y-8",
                 // Step 1: Source selection
-                div {
-                    h3 { class: "text-lg font-medium text-white mb-3", "1. Select Source" }
-                    p { class: "text-gray-400", "No sources connected. Connect a source first." }
+                StepSection { number: "1", title: "Select Source", active: true }
+                div { class: "ml-10",
+                    p { class: "text-slate-400", "No sources connected. Connect a source first." }
                 }
+
+                div { class: "glow-line" }
 
                 // Step 2: Preview (disabled)
-                div { class: "opacity-50",
-                    h3 { class: "text-lg font-medium text-white mb-3", "2. Preview Changes" }
-                    p { class: "text-gray-400", "Changes will appear here after source selection." }
+                StepSection { number: "2", title: "Preview Changes", active: false }
+                div { class: "ml-10 opacity-40",
+                    p { class: "text-slate-400", "Changes will appear here after source selection." }
                 }
 
+                div { class: "glow-line" }
+
                 // Step 3: Execute (disabled)
-                div { class: "opacity-50",
-                    h3 { class: "text-lg font-medium text-white mb-3", "3. Encrypt & Upload" }
+                StepSection { number: "3", title: "Encrypt & Upload", active: false }
+                div { class: "ml-10 opacity-40",
                     button {
-                        class: "px-4 py-2 bg-indigo-600 text-white rounded-lg font-medium opacity-50 cursor-not-allowed",
+                        class: "btn-primary opacity-50 cursor-not-allowed",
                         disabled: true,
                         "Start Backup"
                     }
                 }
             }
+        }
+    }
+}
+
+#[component]
+fn StepSection(number: String, title: String, active: bool) -> Element {
+    let (num_class, title_class) = if active {
+        (
+            "w-8 h-8 rounded-lg bg-gradient-to-br from-cyan-500 to-emerald-500 flex items-center justify-center text-white text-sm font-bold shadow-lg shadow-cyan-500/20",
+            "text-lg font-medium text-white",
+        )
+    } else {
+        (
+            "w-8 h-8 rounded-lg bg-slate-700/50 flex items-center justify-center text-slate-500 text-sm font-bold",
+            "text-lg font-medium text-slate-500",
+        )
+    };
+
+    rsx! {
+        div { class: "flex items-center gap-3",
+            div { class: "{num_class}", "{number}" }
+            h3 { class: "{title_class}", "{title}" }
         }
     }
 }

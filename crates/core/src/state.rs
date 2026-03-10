@@ -54,22 +54,8 @@ impl AppState {
     /// Create a new AppState by checking if a vault exists on disk.
     pub fn new() -> Self {
         let vault_dir = crypto::vault_dir();
-        let keystore_path = crypto::keystore_path();
 
-        let (status, keystore, fingerprints) = if keystore_path.exists() {
-            match crypto::load_key_store() {
-                Ok(ks) => {
-                    let fp = compute_fingerprints(&ks);
-                    (VaultStatus::Locked, Some(ks), Some(fp))
-                }
-                Err(e) => {
-                    tracing::warn!("Failed to load keystore: {e}");
-                    (VaultStatus::NoVault, None, None)
-                }
-            }
-        } else {
-            (VaultStatus::NoVault, None, None)
-        };
+        let (status, keystore, fingerprints) = Self::try_load_keystore();
 
         Self {
             status,
@@ -134,6 +120,31 @@ impl AppState {
     /// Get the encrypted keystore (None if no vault exists).
     pub fn keystore(&self) -> Option<&EncryptedKeyStore> {
         self.keystore.as_ref()
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn try_load_keystore() -> (VaultStatus, Option<EncryptedKeyStore>, Option<KeyFingerprints>) {
+        let keystore_path = crypto::keystore_path();
+        if keystore_path.exists() {
+            match crypto::load_key_store() {
+                Ok(ks) => {
+                    let fp = compute_fingerprints(&ks);
+                    (VaultStatus::Locked, Some(ks), Some(fp))
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to load keystore: {e}");
+                    (VaultStatus::NoVault, None, None)
+                }
+            }
+        } else {
+            (VaultStatus::NoVault, None, None)
+        }
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn try_load_keystore() -> (VaultStatus, Option<EncryptedKeyStore>, Option<KeyFingerprints>) {
+        // On wasm, we can't read the filesystem — always start as NoVault.
+        (VaultStatus::NoVault, None, None)
     }
 
     /// Check if a vault exists on disk.

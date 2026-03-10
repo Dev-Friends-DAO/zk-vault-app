@@ -6317,6 +6317,7 @@ dependencies = [
  "chrono",
  "dirs",
  "ed25519-dalek",
+ "getrandom 0.2.17",
  "hex",
  "pqcrypto-dilithium",
  "pqcrypto-kyber",
@@ -6325,7 +6326,6 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.18",
- "tokio",
  "toml",
  "tracing",
  "uuid",
@@ -6339,11 +6339,13 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "dioxus",
+ "getrandom 0.2.17",
  "serde",
  "serde_json",
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "uuid",
  "zk-vault-core",
 ]
 

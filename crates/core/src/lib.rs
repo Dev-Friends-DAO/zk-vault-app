@@ -1,4 +1,8 @@
 pub mod config;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod crypto;
+#[cfg(target_arch = "wasm32")]
+#[path = "crypto_stub.rs"]
 pub mod crypto;
 pub mod manifest;
 pub mod state;

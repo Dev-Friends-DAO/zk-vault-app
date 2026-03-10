@@ -35,6 +35,8 @@ pub fn Register() -> Element {
         error_msg.set(None);
 
         let state = app_state.clone();
+
+        #[cfg(not(target_arch = "wasm32"))]
         spawn(async move {
             let result = tokio::task::spawn_blocking(move || {
                 let mut s = state.lock().unwrap();
@@ -49,40 +51,62 @@ pub fn Register() -> Element {
                 Err(e) => error_msg.set(Some(format!("{e}"))),
             }
         });
+
+        #[cfg(target_arch = "wasm32")]
+        {
+            let result = {
+                let mut s = state.lock().unwrap();
+                s.init_vault(&pass)
+            };
+            is_loading.set(false);
+            match result {
+                Ok(()) => vault_status.set(VaultStatus::Unlocked),
+                Err(e) => error_msg.set(Some(format!("{e}"))),
+            }
+        }
     };
 
     rsx! {
-        div { class: "min-h-screen flex items-center justify-center bg-gray-950",
-            div { class: "w-full max-w-md",
+        div { class: "min-h-screen flex items-center justify-center bg-slate-950",
+            // Subtle background glow
+            div { class: "absolute inset-0 overflow-hidden pointer-events-none",
+                div { class: "absolute top-1/4 left-1/2 -translate-x-1/2 w-96 h-96 bg-violet-500/5 rounded-full blur-3xl" }
+                div { class: "absolute bottom-1/4 left-1/3 w-64 h-64 bg-cyan-500/5 rounded-full blur-3xl" }
+            }
+
+            div { class: "w-full max-w-md relative z-10",
                 div { class: "text-center mb-8",
-                    h1 { class: "text-3xl font-bold text-white", "zk-vault" }
-                    p { class: "text-gray-400 mt-2", "Create Your Vault" }
+                    div { class: "inline-flex w-14 h-14 rounded-2xl bg-gradient-to-br from-cyan-500 to-emerald-500 items-center justify-center text-white text-xl font-bold shadow-lg shadow-cyan-500/20 mb-4",
+                        "Z"
+                    }
+                    h1 { class: "text-3xl font-bold text-white tracking-tight", "zk-vault" }
+                    p { class: "text-slate-400 mt-2", "Create Your Vault" }
                 }
 
                 form {
                     onsubmit: on_submit,
-                    class: "bg-gray-800 rounded-lg p-6 border border-gray-700 space-y-4",
+                    class: "glass-card p-8 space-y-5",
 
-                    h2 { class: "text-xl font-semibold text-white", "Register" }
+                    h2 { class: "text-xl font-semibold text-white tracking-tight", "Set Up Vault" }
 
-                    div { class: "bg-amber-900/30 border border-amber-700 text-amber-300 px-4 py-2 rounded text-sm",
+                    div { class: "bg-amber-500/10 border border-amber-500/20 text-amber-300 px-4 py-3 rounded-xl text-sm",
                         "Your passphrase never leaves this device. It cannot be recovered — store it safely."
                     }
 
                     if let Some(err) = error_msg() {
-                        div { class: "bg-red-900/50 border border-red-700 text-red-300 px-4 py-2 rounded text-sm",
+                        div { class: "bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-xl text-sm",
                             "{err}"
                         }
                     }
 
                     div {
-                        label { class: "block text-sm text-gray-300 mb-1", r#for: "passphrase",
+                        label { class: "block text-sm text-slate-300 mb-2 font-medium", r#for: "passphrase",
                             "Passphrase"
                         }
                         input {
                             id: "passphrase",
                             r#type: "password",
-                            class: "w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500",
+                            class: "input-field",
                             placeholder: "Choose a strong passphrase (12+ chars)",
                             value: "{passphrase}",
                             disabled: is_loading(),
@@ -91,13 +115,13 @@ pub fn Register() -> Element {
                     }
 
                     div {
-                        label { class: "block text-sm text-gray-300 mb-1", r#for: "confirm",
+                        label { class: "block text-sm text-slate-300 mb-2 font-medium", r#for: "confirm",
                             "Confirm Passphrase"
                         }
                         input {
                             id: "confirm",
                             r#type: "password",
-                            class: "w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500",
+                            class: "input-field",
                             placeholder: "Confirm your passphrase",
                             value: "{confirm}",
                             disabled: is_loading(),
@@ -108,9 +132,9 @@ pub fn Register() -> Element {
                     button {
                         r#type: "submit",
                         class: if is_loading() {
-                            "w-full py-2 bg-indigo-800 text-gray-400 rounded-lg font-medium cursor-not-allowed"
+                            "w-full py-2.5 bg-slate-700 text-slate-400 rounded-xl font-medium cursor-not-allowed"
                         } else {
-                            "w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-medium transition-colors"
+                            "btn-primary w-full"
                         },
                         disabled: is_loading(),
                         if is_loading() { "Creating vault..." } else { "Create Vault" }

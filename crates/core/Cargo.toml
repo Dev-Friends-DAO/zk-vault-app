@@ -8,9 +8,15 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
-tokio = { workspace = true }
+hex = "0.4"
+zeroize = { version = "1", features = ["derive"] }
+dirs = "6"
+uuid = { workspace = true }
+chrono = { workspace = true }
+toml = "0.8"
 
-# Crypto — same crates and versions as zk-vault CLI for keystore interoperability
+# Crypto deps — native only (C FFI, not wasm-compatible)
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 pqcrypto-kyber = "0.8"
 pqcrypto-dilithium = "0.5"
 pqcrypto-traits = "0.3"
@@ -19,10 +25,8 @@ chacha20poly1305 = "0.10"
 blake3 = "1"
 x25519-dalek = { version = "2", features = ["static_secrets"] }
 ed25519-dalek = { version = "2", features = ["rand_core"] }
-zeroize = { version = "1", features = ["derive"] }
 rand = "0.8"
-hex = "0.4"
-dirs = "6"
-uuid = { version = "1", features = ["v7", "serde"] }
-chrono = { workspace = true }
-toml = "0.8"
+
+# Wasm-compatible crypto subset
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { version = "0.2", features = ["js"] }
