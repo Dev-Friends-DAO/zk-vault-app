@@ -4,6 +4,9 @@ use dioxus::prelude::*;
 use zk_vault_core::manifest::{self, BackupSummary};
 use zk_vault_core::AppState;
 
+use crate::dx_components::badge::{Badge, BadgeVariant};
+use crate::dx_components::button::{Button, ButtonVariant};
+use crate::dx_components::card::Card;
 use crate::routes::Route;
 
 #[component]
@@ -24,10 +27,8 @@ pub fn Dashboard() -> Element {
         div { class: "space-y-8",
             div { class: "flex items-center justify-between",
                 h1 { class: "page-title", "Dashboard" }
-                Link {
-                    to: Route::Backup {},
-                    class: "btn-primary",
-                    "New Backup"
+                Link { to: Route::Backup {},
+                    Button { variant: ButtonVariant::Primary, "New Backup" }
                 }
             }
 
@@ -39,7 +40,7 @@ pub fn Dashboard() -> Element {
             }
 
             // Recent backups
-            div { class: "glass-card overflow-hidden",
+            Card { class: "overflow-hidden",
                 div { class: "px-6 py-5 border-b border-slate-700/40",
                     h2 { class: "section-title", "Recent Backups" }
                 }
@@ -69,7 +70,7 @@ fn StatCard(label: String, value: String, accent: String) -> Element {
     };
 
     rsx! {
-        div { class: "glass-card p-6 hover:shadow-lg {accent_classes.2} transition-all duration-300",
+        Card { class: "p-6 hover:shadow-lg {accent_classes.2} transition-all duration-300",
             div { class: "flex items-center justify-between mb-3",
                 p { class: "text-sm text-slate-400 font-medium", "{label}" }
                 div { class: "w-8 h-8 rounded-lg {accent_classes.1} flex items-center justify-center {accent_classes.0} text-xs font-bold",
@@ -95,16 +96,10 @@ fn BackupRow(backup: BackupSummary) -> Element {
         div { class: "px-6 py-4 flex items-center justify-between hover:bg-slate-800/30 transition-colors duration-200",
             div { class: "flex-1",
                 div { class: "flex items-center gap-3",
-                    span { class: "text-white font-medium",
-                        "{backup.source}"
-                    }
-                    span { class: "text-xs text-slate-500 font-mono tracking-wider",
-                        "{id_short}"
-                    }
+                    span { class: "text-white font-medium", "{backup.source}" }
+                    span { class: "text-xs text-slate-500 font-mono tracking-wider", "{id_short}" }
                     if backup.anchored {
-                        span { class: "badge-success",
-                            "Anchored"
-                        }
+                        Badge { variant: BadgeVariant::Primary, "Anchored" }
                     }
                 }
                 div { class: "text-sm text-slate-400 mt-1",

@@ -3,6 +3,9 @@ use std::sync::{Arc, Mutex};
 use dioxus::prelude::*;
 use zk_vault_core::{AppState, VaultStatus};
 
+use crate::dx_components::badge::{Badge, BadgeVariant};
+use crate::dx_components::button::{Button, ButtonVariant};
+
 #[component]
 pub fn Header() -> Element {
     let app_state: Arc<Mutex<AppState>> = use_context();
@@ -26,17 +29,16 @@ pub fn Header() -> Element {
     rsx! {
         header { class: "h-14 bg-slate-900/60 backdrop-blur-xl border-b border-slate-700/40 flex items-center justify-between px-6",
             div { class: "flex items-center gap-3",
-                span { class: "badge-success",
-                    "PQ-Secured"
-                }
+                Badge { variant: BadgeVariant::Primary, "PQ-Secured" }
                 if !fingerprint.is_empty() {
                     span { class: "text-xs text-slate-500 font-mono tracking-wider",
                         "{fingerprint}"
                     }
                 }
             }
-            button {
-                class: "btn-secondary text-xs !px-3 !py-1.5",
+            Button {
+                variant: ButtonVariant::Outline,
+                class: "text-xs",
                 onclick: on_lock,
                 "Lock"
             }

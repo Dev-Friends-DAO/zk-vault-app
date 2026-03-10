@@ -1,5 +1,6 @@
 mod app;
 mod components;
+mod dx_components;
 mod pages;
 mod routes;
 

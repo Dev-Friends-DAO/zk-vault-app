@@ -3,6 +3,11 @@ use std::sync::{Arc, Mutex};
 use dioxus::prelude::*;
 use zk_vault_core::{AppState, VaultStatus};
 
+use crate::dx_components::button::{Button, ButtonVariant};
+use crate::dx_components::card::Card;
+use crate::dx_components::input::Input;
+use crate::dx_components::label::Label;
+
 #[component]
 pub fn Register() -> Element {
     let app_state: Arc<Mutex<AppState>> = use_context();
@@ -68,10 +73,10 @@ pub fn Register() -> Element {
 
     rsx! {
         div { class: "min-h-screen flex items-center justify-center bg-slate-950",
-            // Subtle background glow
-            div { class: "absolute inset-0 overflow-hidden pointer-events-none",
-                div { class: "absolute top-1/4 left-1/2 -translate-x-1/2 w-96 h-96 bg-violet-500/5 rounded-full blur-3xl" }
-                div { class: "absolute bottom-1/4 left-1/3 w-64 h-64 bg-cyan-500/5 rounded-full blur-3xl" }
+            div { class: "fixed inset-0 pointer-events-none",
+                div { class: "absolute top-0 right-0 orb-cyan" }
+                div { class: "absolute top-1/3 left-0 orb-violet" }
+                div { class: "absolute bottom-0 left-1/3 orb-emerald" }
             }
 
             div { class: "w-full max-w-md relative z-10",
@@ -83,61 +88,51 @@ pub fn Register() -> Element {
                     p { class: "text-slate-400 mt-2", "Create Your Vault" }
                 }
 
-                form {
-                    onsubmit: on_submit,
-                    class: "glass-card p-8 space-y-5",
+                Card {
+                    form { onsubmit: on_submit, class: "p-8 space-y-5",
+                        h2 { class: "text-xl font-semibold text-white tracking-tight", "Set Up Vault" }
 
-                    h2 { class: "text-xl font-semibold text-white tracking-tight", "Set Up Vault" }
-
-                    div { class: "bg-amber-500/10 border border-amber-500/20 text-amber-300 px-4 py-3 rounded-xl text-sm",
-                        "Your passphrase never leaves this device. It cannot be recovered — store it safely."
-                    }
-
-                    if let Some(err) = error_msg() {
-                        div { class: "bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-xl text-sm",
-                            "{err}"
+                        div { class: "bg-amber-500/10 border border-amber-500/20 text-amber-300 px-4 py-3 rounded-xl text-sm",
+                            "Your passphrase never leaves this device. It cannot be recovered — store it safely."
                         }
-                    }
 
-                    div {
-                        label { class: "block text-sm text-slate-300 mb-2 font-medium", r#for: "passphrase",
-                            "Passphrase"
+                        if let Some(err) = error_msg() {
+                            div { class: "bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-xl text-sm",
+                                "{err}"
+                            }
                         }
-                        input {
-                            id: "passphrase",
-                            r#type: "password",
-                            class: "input-field",
-                            placeholder: "Choose a strong passphrase (12+ chars)",
-                            value: "{passphrase}",
+
+                        div { class: "space-y-2",
+                            Label { html_for: "passphrase", class: "text-slate-300 font-medium", "Passphrase" }
+                            Input {
+                                id: "passphrase",
+                                r#type: "password",
+                                placeholder: "Choose a strong passphrase (12+ chars)",
+                                value: "{passphrase}",
+                                disabled: is_loading(),
+                                oninput: move |evt: FormEvent| passphrase.set(evt.value()),
+                            }
+                        }
+
+                        div { class: "space-y-2",
+                            Label { html_for: "confirm", class: "text-slate-300 font-medium", "Confirm Passphrase" }
+                            Input {
+                                id: "confirm",
+                                r#type: "password",
+                                placeholder: "Confirm your passphrase",
+                                value: "{confirm}",
+                                disabled: is_loading(),
+                                oninput: move |evt: FormEvent| confirm.set(evt.value()),
+                            }
+                        }
+
+                        Button {
+                            r#type: "submit",
+                            variant: ButtonVariant::Primary,
+                            class: "w-full",
                             disabled: is_loading(),
-                            oninput: move |evt| passphrase.set(evt.value()),
+                            if is_loading() { "Creating vault..." } else { "Create Vault" }
                         }
-                    }
-
-                    div {
-                        label { class: "block text-sm text-slate-300 mb-2 font-medium", r#for: "confirm",
-                            "Confirm Passphrase"
-                        }
-                        input {
-                            id: "confirm",
-                            r#type: "password",
-                            class: "input-field",
-                            placeholder: "Confirm your passphrase",
-                            value: "{confirm}",
-                            disabled: is_loading(),
-                            oninput: move |evt| confirm.set(evt.value()),
-                        }
-                    }
-
-                    button {
-                        r#type: "submit",
-                        class: if is_loading() {
-                            "w-full py-2.5 bg-slate-700 text-slate-400 rounded-xl font-medium cursor-not-allowed"
-                        } else {
-                            "btn-primary w-full"
-                        },
-                        disabled: is_loading(),
-                        if is_loading() { "Creating vault..." } else { "Create Vault" }
                     }
                 }
             }

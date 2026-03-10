@@ -1,0 +1,38 @@
+/* Input Styles */
+.input {
+  position: relative;
+  display: flex;
+  width: 100%;
+  box-sizing: border-box;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.625rem 1rem;
+  border: none;
+  border-radius: 0.75rem;
+  background: none;
+  background-color: rgb(15 23 42 / 0.8);
+  box-shadow: inset 0 0 0 1px rgb(71 85 105 / 0.4);
+  color: #f8fafc;
+  cursor: text;
+  gap: 0.25rem;
+  transition: all 200ms ease-out;
+}
+
+.input::placeholder {
+  color: #64748b;
+}
+
+.input:disabled {
+  color: #64748b;
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.input:hover:not(:disabled),
+.input:focus-visible {
+  background-color: rgb(15 23 42 / 0.9);
+  box-shadow: inset 0 0 0 1px rgb(6 182 212 / 0.6), 0 0 0 2px rgb(6 182 212 / 0.2);
+  color: #f8fafc;
+  outline: none;
+}

@@ -4,12 +4,17 @@ use dioxus::prelude::*;
 use zk_vault_core::config::{self, S3Config};
 use zk_vault_core::{AppState, VaultStatus};
 
+use crate::dx_components::button::{Button, ButtonVariant};
+use crate::dx_components::card::Card;
+use crate::dx_components::input::Input;
+use crate::dx_components::label::Label;
+use crate::dx_components::separator::Separator;
+
 #[component]
 pub fn Settings() -> Element {
     let app_state: Arc<Mutex<AppState>> = use_context();
     let mut vault_status: Signal<VaultStatus> = use_context();
 
-    // Load fingerprints and vault info from state
     let (fingerprints, vault_dir, backup_count) = {
         let state = app_state.lock().unwrap();
         let fp = state.fingerprints.clone();
@@ -18,7 +23,6 @@ pub fn Settings() -> Element {
         (fp, dir, count)
     };
 
-    // S3 config form state
     let existing_s3 = config::load_config()
         .ok()
         .and_then(|c| c.storage.s3)
@@ -37,11 +41,7 @@ pub fn Settings() -> Element {
         let s3 = S3Config {
             bucket: bucket(),
             region: region(),
-            endpoint: if endpoint().is_empty() {
-                None
-            } else {
-                Some(endpoint())
-            },
+            endpoint: if endpoint().is_empty() { None } else { Some(endpoint()) },
             access_key: access_key(),
             secret_key: secret_key(),
             path_style: path_style(),
@@ -67,18 +67,18 @@ pub fn Settings() -> Element {
             h1 { class: "page-title", "Settings" }
 
             // Vault info
-            div { class: "glass-card p-6 space-y-4",
+            Card { class: "p-6 space-y-4",
                 h2 { class: "section-title", "Vault" }
-                div { class: "glow-line" }
+                Separator {}
                 InfoRow { label: "Path", value: vault_dir }
                 InfoRow { label: "Backups", value: "{backup_count}" }
             }
 
             // Public key fingerprints
             if let Some(fp) = &fingerprints {
-                div { class: "glass-card p-6 space-y-4",
+                Card { class: "p-6 space-y-4",
                     h2 { class: "section-title", "Public Keys" }
-                    div { class: "glow-line" }
+                    Separator {}
                     FingerprintRow { label: "ML-KEM-768", value: fp.kem.clone() }
                     FingerprintRow { label: "X25519", value: fp.x25519.clone() }
                     FingerprintRow { label: "ML-DSA-65", value: fp.mldsa.clone() }
@@ -86,10 +86,10 @@ pub fn Settings() -> Element {
                 }
             }
 
-            // Crypto info (static)
-            div { class: "glass-card p-6 space-y-3",
+            // Crypto info
+            Card { class: "p-6 space-y-3",
                 h2 { class: "section-title mb-1", "Cryptography" }
-                div { class: "glow-line" }
+                Separator {}
                 InfoRow { label: "Encryption", value: "XChaCha20-Poly1305" }
                 InfoRow { label: "Key Exchange", value: "ML-KEM-768 + X25519 (Hybrid)" }
                 InfoRow { label: "Signatures", value: "ML-DSA-65 + Ed25519 (Hybrid)" }
@@ -98,89 +98,92 @@ pub fn Settings() -> Element {
             }
 
             // S3 configuration
-            form {
-                onsubmit: on_save_s3,
-                class: "glass-card p-6 space-y-5",
+            Card {
+                form { onsubmit: on_save_s3, class: "p-6 space-y-5",
+                    h2 { class: "section-title", "S3 Storage" }
+                    Separator {}
+                    p { class: "text-sm text-slate-400", "Configure S3-compatible storage (AWS S3, Backblaze B2, Wasabi, MinIO, etc.)" }
 
-                h2 { class: "section-title", "S3 Storage" }
-                div { class: "glow-line" }
-                p { class: "text-sm text-slate-400", "Configure S3-compatible storage (AWS S3, Backblaze B2, Wasabi, MinIO, etc.)" }
+                    if let Some((ok, msg)) = save_msg() {
+                        div {
+                            class: if ok {
+                                "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-4 py-3 rounded-xl text-sm"
+                            } else {
+                                "bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-xl text-sm"
+                            },
+                            "{msg}"
+                        }
+                    }
 
-                if let Some((ok, msg)) = save_msg() {
-                    div {
-                        class: if ok {
-                            "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-4 py-3 rounded-xl text-sm"
-                        } else {
-                            "bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-xl text-sm"
-                        },
-                        "{msg}"
+                    div { class: "grid grid-cols-1 md:grid-cols-2 gap-4",
+                        div { class: "space-y-2",
+                            Label { html_for: "bucket", class: "text-slate-300 font-medium", "Bucket" }
+                            Input {
+                                placeholder: "my-zk-vault-backups",
+                                value: "{bucket}",
+                                oninput: move |evt: FormEvent| bucket.set(evt.value()),
+                            }
+                        }
+                        div { class: "space-y-2",
+                            Label { html_for: "region", class: "text-slate-300 font-medium", "Region" }
+                            Input {
+                                placeholder: "us-east-1",
+                                value: "{region}",
+                                oninput: move |evt: FormEvent| region.set(evt.value()),
+                            }
+                        }
+                        div { class: "space-y-2",
+                            Label { html_for: "endpoint", class: "text-slate-300 font-medium", "Endpoint (optional)" }
+                            Input {
+                                placeholder: "https://s3.us-west-000.backblazeb2.com",
+                                value: "{endpoint}",
+                                oninput: move |evt: FormEvent| endpoint.set(evt.value()),
+                            }
+                        }
+                        div { class: "space-y-2",
+                            Label { html_for: "access_key", class: "text-slate-300 font-medium", "Access Key" }
+                            Input {
+                                placeholder: "AKIA...",
+                                value: "{access_key}",
+                                oninput: move |evt: FormEvent| access_key.set(evt.value()),
+                            }
+                        }
                     }
-                }
 
-                div { class: "grid grid-cols-1 md:grid-cols-2 gap-4",
-                    FormField {
-                        label: "Bucket",
-                        placeholder: "my-zk-vault-backups",
-                        value: bucket(),
-                        on_input: move |v: String| bucket.set(v),
+                    div { class: "max-w-md space-y-2",
+                        Label { html_for: "secret_key", class: "text-slate-300 font-medium", "Secret Key" }
+                        Input {
+                            r#type: "password",
+                            placeholder: "Your secret access key",
+                            value: "{secret_key}",
+                            oninput: move |evt: FormEvent| secret_key.set(evt.value()),
+                        }
                     }
-                    FormField {
-                        label: "Region",
-                        placeholder: "us-east-1",
-                        value: region(),
-                        on_input: move |v: String| region.set(v),
-                    }
-                    FormField {
-                        label: "Endpoint (optional)",
-                        placeholder: "https://s3.us-west-000.backblazeb2.com",
-                        value: endpoint(),
-                        on_input: move |v: String| endpoint.set(v),
-                    }
-                    FormField {
-                        label: "Access Key",
-                        placeholder: "AKIA...",
-                        value: access_key(),
-                        on_input: move |v: String| access_key.set(v),
-                    }
-                }
 
-                div { class: "max-w-md",
-                    label { class: "block text-sm text-slate-300 mb-2 font-medium", "Secret Key" }
-                    input {
-                        r#type: "password",
-                        class: "input-field",
-                        placeholder: "Your secret access key",
-                        value: "{secret_key}",
-                        oninput: move |evt| secret_key.set(evt.value()),
+                    div { class: "flex items-center gap-3",
+                        input {
+                            id: "path_style",
+                            r#type: "checkbox",
+                            checked: path_style(),
+                            onchange: move |evt: FormEvent| path_style.set(evt.checked()),
+                        }
+                        Label { html_for: "path_style", class: "text-slate-300", "Path-style addressing (required for MinIO)" }
                     }
-                }
 
-                div { class: "flex items-center gap-3",
-                    input {
-                        id: "path_style",
-                        r#type: "checkbox",
-                        class: "rounded bg-slate-900 border-slate-600 text-cyan-500 focus:ring-cyan-500/20",
-                        checked: path_style(),
-                        onchange: move |evt| path_style.set(evt.checked()),
+                    Button {
+                        r#type: "submit",
+                        variant: ButtonVariant::Primary,
+                        "Save S3 Config"
                     }
-                    label { class: "text-sm text-slate-300", r#for: "path_style",
-                        "Path-style addressing (required for MinIO)"
-                    }
-                }
-
-                button {
-                    r#type: "submit",
-                    class: "btn-primary",
-                    "Save S3 Config"
                 }
             }
 
             // Danger zone
-            div { class: "glass-card p-6 space-y-4 !border-red-500/20",
+            Card { class: "p-6 space-y-4 !border-red-500/20",
                 h2 { class: "text-lg font-semibold text-red-400 tracking-tight", "Danger Zone" }
                 div { class: "h-px bg-gradient-to-r from-transparent via-red-500/30 to-transparent" }
-                button {
-                    class: "btn-danger",
+                Button {
+                    variant: ButtonVariant::Destructive,
                     onclick: on_lock,
                     "Lock Vault"
                 }
@@ -205,27 +208,6 @@ fn FingerprintRow(label: String, value: String) -> Element {
         div { class: "flex justify-between text-sm py-1",
             span { class: "text-slate-400", "{label}" }
             span { class: "text-cyan-400 font-mono tracking-wider", "{value}" }
-        }
-    }
-}
-
-#[component]
-fn FormField(
-    label: String,
-    placeholder: String,
-    value: String,
-    on_input: EventHandler<String>,
-) -> Element {
-    rsx! {
-        div {
-            label { class: "block text-sm text-slate-300 mb-2 font-medium", "{label}" }
-            input {
-                r#type: "text",
-                class: "input-field",
-                placeholder: "{placeholder}",
-                value: "{value}",
-                oninput: move |evt| on_input(evt.value()),
-            }
         }
     }
 }

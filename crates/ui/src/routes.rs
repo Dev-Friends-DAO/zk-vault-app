@@ -33,9 +33,15 @@ pub enum Route {
 #[component]
 fn AppLayout() -> Element {
     rsx! {
-        div { class: "flex min-h-screen bg-slate-950 text-slate-100",
+        div { class: "flex min-h-screen bg-slate-950 text-slate-100 relative overflow-hidden",
+            // Ambient background orbs
+            div { class: "fixed inset-0 pointer-events-none z-0",
+                div { class: "absolute -top-40 -right-40 orb-cyan" }
+                div { class: "absolute top-1/2 -left-20 orb-violet" }
+                div { class: "absolute -bottom-32 right-1/3 orb-emerald" }
+            }
             Sidebar {}
-            div { class: "ml-64 flex-1 flex flex-col",
+            div { class: "ml-64 flex-1 flex flex-col relative z-10",
                 Header {}
                 main { class: "flex-1 p-8",
                     Outlet::<Route> {}

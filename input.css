@@ -18,6 +18,40 @@
     ::-webkit-scrollbar-thumb:hover {
         @apply bg-slate-600/50;
     }
+
+    /* Checkbox — native HTML checkbox styled for dark glassmorphism */
+    input[type="checkbox"] {
+        appearance: none;
+        -webkit-appearance: none;
+        width: 1.125rem;
+        height: 1.125rem;
+        border: 1px solid rgb(71 85 105 / 0.6);
+        border-radius: 0.25rem;
+        background-color: rgb(15 23 42 / 0.8);
+        cursor: pointer;
+        position: relative;
+        flex-shrink: 0;
+        transition: all 0.15s ease;
+    }
+    input[type="checkbox"]:checked {
+        background-color: #06b6d4;
+        border-color: #06b6d4;
+    }
+    input[type="checkbox"]:checked::after {
+        content: "";
+        position: absolute;
+        left: 5px;
+        top: 1px;
+        width: 5px;
+        height: 10px;
+        border: solid white;
+        border-width: 0 2px 2px 0;
+        transform: rotate(45deg);
+    }
+    input[type="checkbox"]:focus-visible {
+        box-shadow: 0 0 0 2px rgb(6 182 212 / 0.3);
+        outline: none;
+    }
 }
 
 @utility glass-card {
@@ -66,4 +100,53 @@
 
 @utility glow-line {
     @apply h-px bg-gradient-to-r from-transparent via-cyan-500/40 to-transparent;
+}
+
+/* Background orbs */
+@keyframes orb-float {
+    0% { opacity: 0.5; transform: scale(1) translate(0, 0) rotate(0deg); }
+    20% { opacity: 1; transform: scale(1.3) translate(60px, -40px) rotate(5deg); }
+    40% { opacity: 0.7; transform: scale(0.9) translate(-30px, 50px) rotate(-3deg); }
+    60% { opacity: 1; transform: scale(1.2) translate(40px, 20px) rotate(4deg); }
+    80% { opacity: 0.6; transform: scale(1.1) translate(-50px, -30px) rotate(-2deg); }
+    100% { opacity: 0.5; transform: scale(1) translate(0, 0) rotate(0deg); }
+}
+@keyframes orb-float-alt {
+    0% { opacity: 0.4; transform: scale(1.1) translate(0, 0) rotate(0deg); }
+    25% { opacity: 1; transform: scale(0.85) translate(-50px, 60px) rotate(-6deg); }
+    50% { opacity: 0.8; transform: scale(1.25) translate(40px, -20px) rotate(3deg); }
+    75% { opacity: 1; transform: scale(1) translate(-30px, -40px) rotate(-4deg); }
+    100% { opacity: 0.4; transform: scale(1.1) translate(0, 0) rotate(0deg); }
+}
+@keyframes orb-pulse {
+    0%, 100% { opacity: 0.3; transform: scale(1) translate(0, 0); }
+    15% { opacity: 0.9; transform: scale(1.4) translate(70px, 30px); }
+    35% { opacity: 0.5; transform: scale(0.8) translate(-40px, -50px); }
+    55% { opacity: 1; transform: scale(1.2) translate(20px, 60px); }
+    75% { opacity: 0.6; transform: scale(1.1) translate(-60px, 10px); }
+}
+
+@utility orb-cyan {
+    width: 700px;
+    height: 700px;
+    border-radius: 9999px;
+    background: radial-gradient(circle, rgb(6 182 212 / 0.45), rgb(6 182 212 / 0.15));
+    filter: blur(100px);
+    animation: orb-float 8s ease-in-out infinite;
+}
+@utility orb-violet {
+    width: 650px;
+    height: 650px;
+    border-radius: 9999px;
+    background: radial-gradient(circle, rgb(139 92 246 / 0.4), rgb(139 92 246 / 0.1));
+    filter: blur(100px);
+    animation: orb-float-alt 10s ease-in-out infinite;
+}
+@utility orb-emerald {
+    width: 600px;
+    height: 600px;
+    border-radius: 9999px;
+    background: radial-gradient(circle, rgb(16 185 129 / 0.35), rgb(16 185 129 / 0.1));
+    filter: blur(100px);
+    animation: orb-pulse 12s ease-in-out infinite;
 }

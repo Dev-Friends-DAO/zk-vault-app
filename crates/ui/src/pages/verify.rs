@@ -1,12 +1,14 @@
 use dioxus::prelude::*;
 
+use crate::dx_components::card::Card;
+
 #[component]
 pub fn Verify() -> Element {
     rsx! {
         div { class: "space-y-8",
             h1 { class: "page-title", "Verify Integrity" }
 
-            div { class: "glass-card p-6 space-y-5",
+            Card { class: "p-6 space-y-5",
                 p { class: "text-slate-400",
                     "Verify the integrity of your backups using Merkle proofs "
                     "and blockchain anchors (Bitcoin OP_RETURN + Ethereum calldata)."

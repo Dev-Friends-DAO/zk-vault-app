@@ -9,12 +9,6 @@ use crate::routes::Route;
 
 const TAILWIND_CSS: &str = include_str!("../../../assets/tailwind.css");
 
-/// Root application component.
-///
-/// Provides AppState via context and decides layout based on vault status:
-/// - NoVault → Register page (no chrome)
-/// - Locked  → Login page (no chrome)
-/// - Unlocked → Full layout with sidebar, header, and router
 #[component]
 pub fn App() -> Element {
     let app_state = use_context_provider(|| Arc::new(Mutex::new(AppState::new())));
@@ -29,6 +23,7 @@ pub fn App() -> Element {
 
     rsx! {
         document::Style { {TAILWIND_CSS} }
+        document::Style { {include_str!("../../../assets/dx-components-theme.css")} }
 
         match current_status {
             VaultStatus::NoVault => rsx! { Register {} },

@@ -1,33 +1,35 @@
 use dioxus::prelude::*;
 
+use crate::dx_components::button::{Button, ButtonVariant};
+use crate::dx_components::card::Card;
+use crate::dx_components::separator::Separator;
+
 #[component]
 pub fn Backup() -> Element {
     rsx! {
         div { class: "space-y-8",
             h1 { class: "page-title", "New Backup" }
 
-            div { class: "glass-card p-8 space-y-8",
-                // Step 1: Source selection
+            Card { class: "p-8 space-y-8",
                 StepSection { number: "1", title: "Select Source", active: true }
                 div { class: "ml-10",
                     p { class: "text-slate-400", "No sources connected. Connect a source first." }
                 }
 
-                div { class: "glow-line" }
+                Separator {}
 
-                // Step 2: Preview (disabled)
                 StepSection { number: "2", title: "Preview Changes", active: false }
                 div { class: "ml-10 opacity-40",
                     p { class: "text-slate-400", "Changes will appear here after source selection." }
                 }
 
-                div { class: "glow-line" }
+                Separator {}
 
-                // Step 3: Execute (disabled)
                 StepSection { number: "3", title: "Encrypt & Upload", active: false }
                 div { class: "ml-10 opacity-40",
-                    button {
-                        class: "btn-primary opacity-50 cursor-not-allowed",
+                    Button {
+                        variant: ButtonVariant::Primary,
+                        class: "opacity-50 cursor-not-allowed",
                         disabled: true,
                         "Start Backup"
                     }
