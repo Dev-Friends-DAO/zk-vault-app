@@ -14,10 +14,9 @@ zk-vault-app (this repo)
 └── input.css      Tailwind v4 source with custom utilities
 
 zk-vault (sibling repo)
-├── src/crypto     Shared post-quantum encryption primitives
-├── src/merkle     Merkle tree and Super Merkle Tree
-├── src/anchor     Bitcoin / Ethereum anchoring
-└── src/...        Chain node (future)
+├── crates/core    Crypto, merkle, anchor, storage, pipeline
+├── crates/cli     Command-line interface
+└── crates/chain   Chain node (consensus, RPC, blob store)
 ```
 
 The app operates in two modes:
